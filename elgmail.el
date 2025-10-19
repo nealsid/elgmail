@@ -20,18 +20,27 @@
 
 (defvar elg--oauth-token "" "The oauth2.el structure which contains the token for accessing the Gmail API")
 (defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
+(defvar elg--label-server-label-alist '() "An association list of local labels to server label names.  Required because Gmail API is case sensitive regarding labels.")
 
 (defun elgmail ()
   (interactive)
-  (if (or (not elg--oauth-token) (not (elg-token-valid)))
+  (if (or (not elg--oauth-token) (not (elg--token-valid)))
       (elg-login))
   (pop-to-buffer (get-buffer-create "*elgmail labels*"))
   (erase-buffer)
+  (delete-other-windows)
   (let ((labels (elg-download-label-list)))
     (dolist (one-label labels)
-      (insert-button one-label)
-      (insert "\n"))))
+      (insert-button (car one-label) 'action 'elg-fetch-conversations-for-label)
+      (insert "\n")))
+  (let ((conversation-list-buffer (get-buffer-create "*elgmail conversations*")))
+    (split-window-right)
+    (switch-to-buffer-other-window conversation-list-buffer)))
 
+(defun elg-fetch-conversations-for-label (button)
+  (let ((label-name (button-label button)))
+    (elg-get-conversations-for-labels (list label-name))))
+  
 (defun elg-login ()
   (setq elg--oauth-token
         (let ((auth-url "https://accounts.google.com/o/oauth2/auth")
@@ -45,15 +54,6 @@
               ;;            (redirect-uri "http://localhost:8383"))
               (redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
           (oauth2-auth auth-url token-url client-id client-secret scope nil redirect-uri))))
-
-(defun elg-token-valid ()
-  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
-         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token)))))
-    (let ((label-fetch-response-buffer (url-retrieve-synchronously
-                                        "https://gmail.googleapis.com/gmail/v1/users/me/labels")))
-      (with-current-buffer label-fetch-response-buffer
-        (goto-char (point-min))
-        (re-search-forward "HTTP/1.1 200 OK" nil t)))))
 
 (defun elg-download-label-list ()
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
@@ -79,5 +79,27 @@
           (dolist (one-label-ht label-array)
             (let ((label-name (gethash "name" one-label-ht)))
               (if (member-ignore-case label-name elg-label-filter)
-                  (push (capitalize label-name) final-label-list))))
+                  (push `(,(capitalize label-name) . ,label-name) final-label-list))))
           final-label-list)))))
+
+(defun elg-get-conversations-for-labels (labels)
+  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
+         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
+         (get-convo-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=" (string-join labels ","))))
+    (let* ((convo-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-convo-url))))
+      (message "%s" convo-fetch-response-buffer)
+      (with-current-buffer convo-fetch-response-buffer
+        (goto-char (point-min))
+        (re-search-forward "^{")
+        (backward-char)
+        (gethash "threads" (json-parse-buffer))))))
+
+(defun elg--token-valid ()
+  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
+         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token)))))
+    (let ((label-fetch-response-buffer (url-retrieve-synchronously
+                                        "https://gmail.googleapis.com/gmail/v1/users/me/labels")))
+      (with-current-buffer label-fetch-response-buffer
+        (goto-char (point-min))
+        (re-search-forward "HTTP/1.1 200 OK" nil t)))))
+
