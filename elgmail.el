@@ -20,6 +20,7 @@
 (require 'oauth2)
 
 (defvar elg--oauth-token "" "The OAuth token for accessing the Gmail API")
+(defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
 
 (defun elgmail ()
   (interactive)
@@ -41,10 +42,25 @@
 (defun elg-download-label-list ()
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))) 
-    ;; need to nest let expressions because url-request-extra-headers
-    ;; is dynamically scoped for url-retrieve-synchronously calls
+    ;; need to nest let expressions rather than just using the let*
+    ;; because url-request-extra-headers won't be dynamically scoped
+    ;; for the url-retrieve-synchronously call otherwise.
     (let ((label-fetch-response-buffer (url-retrieve-synchronously "https://gmail.googleapis.com/gmail/v1/users/me/labels")))
-      (switch-to-buffer label-fetch-response-buffer))))
+      (with-current-buffer label-fetch-response-buffer
+        (goto-char (point-min))
+        (re-search-forward "^{")
+        (backward-char)
+        (let* ((label-response-ht (json-parse-string (buffer-substring (point) (point-max)) :array-type 'list))
+               (label-array (gethash "labels" label-response-ht))
+               (final-label-list (list)))
+          (dolist (one-label-ht label-array)
+            (let ((label-name (gethash "name" one-label-ht)))
+              (if (member-ignore-case label-name elg-label-filter)
+                  (push label-name final-label-list))))
+          final-label-list)))))
+               
+          
+
       
       
          
