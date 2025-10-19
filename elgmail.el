@@ -20,7 +20,7 @@
 
 (defvar elg--oauth-token "" "The oauth2.el structure which contains the token for accessing the Gmail API")
 (defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
-(defvar elg--label-server-label-alist '() "An association list of local labels to server label names.  Required because Gmail API is case sensitive regarding labels.")
+(defvar elg--label-to-server-label-alist '() "An association list of local labels to server label names.  Required because Gmail API is case sensitive regarding labels.")
 
 (defun elgmail ()
   (interactive)
@@ -30,6 +30,7 @@
   (erase-buffer)
   (delete-other-windows)
   (let ((labels (elg-download-label-list)))
+    (setq elg--label-to-server-label-alist labels)
     (dolist (one-label labels)
       (insert-button (car one-label) 'action 'elg-fetch-conversations-for-label)
       (insert "\n")))
@@ -38,8 +39,10 @@
     (switch-to-buffer-other-window conversation-list-buffer)))
 
 (defun elg-fetch-conversations-for-label (button)
-  (let ((label-name (button-label button)))
-    (elg-get-conversations-for-labels (list label-name))))
+  (let* ((label-name (button-label button))
+         (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
+         (server-label-name (cdr label-alist-entry)))
+    (elg-get-conversations-for-labels (list server-label-name))))
   
 (defun elg-login ()
   (setq elg--oauth-token
