@@ -24,6 +24,14 @@
 
 (defun elgmail ()
   (interactive)
+  (if (or (not elg--oauth-token) (not (elg-token-valid)))
+      (elg-login))
+  (switch-to-buffer (get-buffer-create "*elgmail*"))
+  (erase-buffer)
+  (let ((labels (elg-download-label-list)))
+    (insert (string-join labels "\n"))))
+
+(defun elg-login ()
   (setq elg--oauth-token
         (let ((auth-url "https://accounts.google.com/o/oauth2/auth")
               (token-url "https://www.googleapis.com/oauth2/v3/token")
@@ -35,34 +43,40 @@
                                     "https://www.googleapis.com/auth/gmail.readonly") " "))
               ;;            (redirect-uri "http://localhost:8383"))
               (redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
-          (oauth2-auth auth-url token-url client-id client-secret scope nil redirect-uri)))
-  (switch-to-buffer (get-buffer-create "*elgmail*")))
+          (oauth2-auth auth-url token-url client-id client-secret scope nil redirect-uri))))
 
+(defun elg-token-valid ()
+  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
+         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token)))))
+    (let ((label-fetch-response-buffer (url-retrieve-synchronously
+                                        "https://gmail.googleapis.com/gmail/v1/users/me/labels")))
+      (with-current-buffer label-fetch-response-buffer
+        (goto-char (point-min))
+        (re-search-forward "HTTP/1.1 200 OK" nil t)))))
 
 (defun elg-download-label-list ()
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
-         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))) 
+         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token)))))
     ;; need to nest let expressions rather than just using the let*
     ;; because url-request-extra-headers won't be dynamically scoped
     ;; for the url-retrieve-synchronously call otherwise.
-    (let ((label-fetch-response-buffer (url-retrieve-synchronously "https://gmail.googleapis.com/gmail/v1/users/me/labels")))
+    (let ((label-fetch-response-buffer (url-retrieve-synchronously
+                                        "https://gmail.googleapis.com/gmail/v1/users/me/labels")))
+      ;; parse the result of the http fetch into a hash table
       (with-current-buffer label-fetch-response-buffer
         (goto-char (point-min))
         (re-search-forward "^{")
         (backward-char)
-        (let* ((label-response-ht (json-parse-string (buffer-substring (point) (point-max)) :array-type 'list))
-               (label-array (gethash "labels" label-response-ht))
+        (let* ((label-response-ht (json-parse-string (buffer-substring
+                                                      (point)
+                                                      (point-max))
+                                                     :array-type 'list))
+               (label-array (gethash "labels" label-response-ht)) ;; the outermost hash table has a
+                                                                  ;; key of labels and a value of an
+                                                                  ;; array of hash tables
                (final-label-list (list)))
           (dolist (one-label-ht label-array)
             (let ((label-name (gethash "name" one-label-ht)))
               (if (member-ignore-case label-name elg-label-filter)
-                  (push label-name final-label-list))))
+                  (push (capitalize label-name) final-label-list))))
           final-label-list)))))
-               
-          
-
-      
-      
-         
-         
-    
