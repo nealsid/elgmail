@@ -1,4 +1,4 @@
-;;; elgmail.el --- Emacs Lisp GMail API wrapper
+;;; elgmail.el --- Emacs Lisp Gmail API wrapper
 
 ;; Copyright (C) 2025- Neal Sidhwaney
 
@@ -12,24 +12,25 @@
 
 ;; Wrapper for GMail API for Emacs
 ;;
-;; The main entry point is `elgmail', which will initialize elgmail,
-;; authenticate to Google's OAuth server and show a UI for reading
-;; messages.
+;; The main entry point is `elgmail', which will initialize elgmail, authenticate to Google's OAuth
+;; server if necessary, and show a UI for reading messages.
 
 ;;; Code:
 (require 'oauth2)
 
-(defvar elg--oauth-token "" "The OAuth token for accessing the Gmail API")
+(defvar elg--oauth-token "" "The oauth2.el structure which contains the token for accessing the Gmail API")
 (defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
 
 (defun elgmail ()
   (interactive)
   (if (or (not elg--oauth-token) (not (elg-token-valid)))
       (elg-login))
-  (switch-to-buffer (get-buffer-create "*elgmail*"))
+  (pop-to-buffer (get-buffer-create "*elgmail labels*"))
   (erase-buffer)
   (let ((labels (elg-download-label-list)))
-    (insert (string-join labels "\n"))))
+    (dolist (one-label labels)
+      (insert-button one-label)
+      (insert "\n"))))
 
 (defun elg-login ()
   (setq elg--oauth-token
