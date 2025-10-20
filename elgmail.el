@@ -35,29 +35,6 @@
       (insert-button (car one-label) 'action 'elg-get-and-display-conversations-for-label)
       (insert "\n"))))
 
-(defun elg-get-and-display-conversations-for-label (button)
-  (let* ((label-name (button-label button))
-         (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
-         (server-label-name (cdr label-alist-entry)))
-    (elg-get-conversations-for-labels (list server-label-name)))
-  (let ((conversation-list-buffer (get-buffer-create "*elgmail conversations*")))
-    (split-window-right)
-    (switch-to-buffer-other-window conversation-list-buffer)))
-  
-(defun elg-login ()
-  (setq elg--oauth-token
-        (let ((auth-url "https://accounts.google.com/o/oauth2/auth")
-              (token-url "https://www.googleapis.com/oauth2/v3/token")
-              (client-id "257844492512-mn23vgehklrfv7rdoccr02lbb964flp3.apps.googleusercontent.com")
-              (client-secret (with-temp-buffer
-                               (insert-file-contents "~/elgmail-client-secret.txt")
-                               (string-trim (buffer-string))));; TODO: how do i ship this library without revealing the client secret?
-              (scope (string-join '("https://www.googleapis.com/auth/gmail.labels"
-                                    "https://www.googleapis.com/auth/gmail.readonly") " "))
-              ;;            (redirect-uri "http://localhost:8383"))
-              (redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
-          (oauth2-auth auth-url token-url client-id client-secret scope nil redirect-uri))))
-
 (defun elg-download-label-list ()
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token)))))
@@ -82,6 +59,19 @@
                   (push `(,(capitalize label-name) . ,label-name) final-label-list))))
           final-label-list)))))
 
+(defun elg-get-and-display-conversations-for-label (button)
+  (let* ((label-name (button-label button))
+         (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
+         (server-label-name (cdr label-alist-entry))
+         (conversations (elg-get-conversations-for-labels (list server-label-name)))
+         (conversation-list-buffer (get-buffer-create "*elgmail conversations*")))
+    (split-window-right)
+    (switch-to-buffer-other-window conversation-list-buffer)
+    (erase-buffer)
+    (dolist (one-conversation conversations)
+      (let ((one-snippet (gethash "snippet" one-conversation)))
+        (insert (concat "\t" (substring one-snippet 0 100) "\n"))))))
+
 (defun elg-get-conversations-for-labels (labels)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
@@ -92,7 +82,21 @@
         (goto-char (point-min))
         (re-search-forward "^{")
         (backward-char)
-        (gethash "threads" (json-parse-buffer))))))
+        (gethash "threads" (json-parse-buffer :array-type 'list))))))
+
+(defun elg-login ()
+  (setq elg--oauth-token
+        (let ((auth-url "https://accounts.google.com/o/oauth2/auth")
+              (token-url "https://www.googleapis.com/oauth2/v3/token")
+              (client-id "257844492512-mn23vgehklrfv7rdoccr02lbb964flp3.apps.googleusercontent.com")
+              (client-secret (with-temp-buffer
+                               (insert-file-contents "~/elgmail-client-secret.txt")
+                               (string-trim (buffer-string))));; TODO: how do i ship this library without revealing the client secret?
+              (scope (string-join '("https://www.googleapis.com/auth/gmail.labels"
+                                    "https://www.googleapis.com/auth/gmail.readonly") " "))
+              ;;            (redirect-uri "http://localhost:8383"))
+              (redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
+          (oauth2-auth auth-url token-url client-id client-secret scope nil redirect-uri))))
 
 (defun elg--token-valid ()
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
