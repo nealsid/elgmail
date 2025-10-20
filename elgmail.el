@@ -32,17 +32,17 @@
   (let ((labels (elg-download-label-list)))
     (setq elg--label-to-server-label-alist labels)
     (dolist (one-label labels)
-      (insert-button (car one-label) 'action 'elg-fetch-conversations-for-label)
-      (insert "\n")))
-  (let ((conversation-list-buffer (get-buffer-create "*elgmail conversations*")))
-    (split-window-right)
-    (switch-to-buffer-other-window conversation-list-buffer)))
+      (insert-button (car one-label) 'action 'elg-get-and-display-conversations-for-label)
+      (insert "\n"))))
 
-(defun elg-fetch-conversations-for-label (button)
+(defun elg-get-and-display-conversations-for-label (button)
   (let* ((label-name (button-label button))
          (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
          (server-label-name (cdr label-alist-entry)))
-    (elg-get-conversations-for-labels (list server-label-name))))
+    (elg-get-conversations-for-labels (list server-label-name)))
+  (let ((conversation-list-buffer (get-buffer-create "*elgmail conversations*")))
+    (split-window-right)
+    (switch-to-buffer-other-window conversation-list-buffer)))
   
 (defun elg-login ()
   (setq elg--oauth-token
@@ -71,13 +71,10 @@
         (goto-char (point-min))
         (re-search-forward "^{")
         (backward-char)
-        (let* ((label-response-ht (json-parse-string (buffer-substring
-                                                      (point)
-                                                      (point-max))
-                                                     :array-type 'list))
+        (let* ((label-response-ht (json-parse-buffer :array-type 'list))
                (label-array (gethash "labels" label-response-ht)) ;; the outermost hash table has a
-                                                                  ;; key of labels and a value of an
-                                                                  ;; array of hash tables
+                                                                  ;; key of 'labels' and a value of
+                                                                  ;; an array of hash tables
                (final-label-list (list)))
           (dolist (one-label-ht label-array)
             (let ((label-name (gethash "name" one-label-ht)))
