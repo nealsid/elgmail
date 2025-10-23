@@ -18,7 +18,7 @@
 ;;; Code:
 (require 'oauth2)
 
-(defvar elg--oauth-token "" "The oauth2.el structure which contains the token for accessing the Gmail API")
+(defvar elg--oauth-token nil "The oauth2.el structure which contains the token for accessing the Gmail API")
 (defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
 (defvar elg--label-to-server-label-alist '() "An association list of local labels to server label names.  Required because Gmail API is case sensitive regarding labels.")
 
@@ -70,8 +70,19 @@
     (erase-buffer)
     (dolist (one-conversation conversations)
       (let ((one-snippet (gethash "snippet" one-conversation)))
-        (insert (concat "\t" (substring one-snippet 0 100) "\n"))))))
+        (insert "\t")
+        (insert-button (substring one-snippet 0 75)
+                       'action 'elg-get-and-display-conversation
+                       'conversation-id (gethash "id" one-conversation))
+        (insert "\n")))))
 
+(defun elg-get-thread-by-id (thread-id)
+  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
+         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
+         (get-thread-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads/" thread-id)))
+    (let ((thread-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-thread-url))))
+      (message "%s" thread-fetch-response-buffer))))
+  
 (defun elg-get-conversations-for-labels (labels)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
