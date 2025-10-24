@@ -69,9 +69,11 @@
     (switch-to-buffer-other-window conversation-list-buffer)
     (erase-buffer)
     (dolist (one-conversation conversations)
-      (let ((one-snippet (gethash "snippet" one-conversation)))
+      (let* ((one-snippet (gethash "snippet" one-conversation))
+             (complete-thread (elg-get-thread-by-id (gethash "id" one-conversation)))
+             (thread-subject (gethash "subject" (nth 0 (gethash "headers" (gethash "payload" (nth 0 (gethash "messages" complete-thread))))))))
         (insert "\t")
-        (insert-button (substring one-snippet 0 75)
+        (insert-button (concat (format "(%d) " (length (gethash "messages" complete-thread))) thread-subject)
                        'action 'elg-get-and-display-conversation
                        'conversation-id (gethash "id" one-conversation))
         (insert "\n")))))
@@ -81,7 +83,12 @@
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
          (get-thread-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads/" thread-id)))
     (let ((thread-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-thread-url))))
-      (message "%s" thread-fetch-response-buffer))))
+      (message "%s" thread-fetch-response-buffer)
+      (with-current-buffer thread-fetch-response-buffer
+        (goto-char (point-min))
+        (re-search-forward "^{")
+        (backward-char)
+        (json-parse-buffer :array-type 'list)))))
   
 (defun elg-get-conversations-for-labels (labels)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
