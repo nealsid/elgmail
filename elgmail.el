@@ -71,19 +71,25 @@
     (dolist (one-conversation conversations)
       (let* ((one-snippet (gethash "snippet" one-conversation))
              (complete-thread (elg-get-thread-by-id (gethash "id" one-conversation)))
-             (thread-subject (gethash "subject" (nth 0 (gethash "headers" (gethash "payload" (nth 0 (gethash "messages" complete-thread))))))))
+             (first-message-headers (gethash "headers" (gethash "payload" (nth 0 (gethash "messages" complete-thread))))))
         (insert "\t")
-        (insert-button (concat (format "(%d) " (length (gethash "messages" complete-thread))) thread-subject)
+        (insert-button (format "(%d) %s" (length (gethash "messages" complete-thread)) (elg--get-subject-from-headers first-message-headers))
                        'action 'elg-get-and-display-conversation
                        'conversation-id (gethash "id" one-conversation))
         (insert "\n")))))
 
+(defun elg--get-subject-from-headers (message-headers)
+  (dolist (one-header first-message-headers)
+    (let ((header-name (gethash "name" one-header)))
+      (when (string-equal header-name "Subject")
+        (gethash "value" one-header)))))
+  
 (defun elg-get-thread-by-id (thread-id)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
          (get-thread-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads/" thread-id)))
     (let ((thread-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-thread-url))))
-      (message "%s" thread-fetch-response-buffer)
+;;      (message "%s" thread-fetch-response-buffer)
       (with-current-buffer thread-fetch-response-buffer
         (goto-char (point-min))
         (re-search-forward "^{")
