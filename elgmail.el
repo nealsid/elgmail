@@ -80,7 +80,7 @@
 
 (defun elg--get-subject-from-headers (message-headers)
   (catch 'found-subject
-    (dolist (one-header first-message-headers)
+    (dolist (one-header message-headers)
       (let ((header-name (gethash "name" one-header)))
         (when (string-equal header-name "Subject")
           (throw 'found-subject (gethash "value" one-header)))))))
