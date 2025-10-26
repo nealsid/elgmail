@@ -21,6 +21,7 @@
 (defvar elg--oauth-token nil "The oauth2.el structure which contains the token for accessing the Gmail API")
 (defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
 (defvar elg--label-to-server-label-alist '() "An association list of local labels to server label names.  Required because Gmail API is case sensitive regarding labels.")
+(defvar elg--thread-id-to-thread-cache (make-hash-table :test 'equal) "A hash table of thread id to thread resource.  This is a cache for downloading threads from Google's servers.")
 
 (defun elgmail ()
   (interactive)
@@ -89,16 +90,21 @@
           (throw 'found-subject (gethash "value" one-header)))))))
   
 (defun elg-get-thread-by-id (thread-id)
-  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
-         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
-         (get-thread-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads/" thread-id)))
-    (let ((thread-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-thread-url))))
-;;      (message "%s" thread-fetch-response-buffer)
-      (with-current-buffer thread-fetch-response-buffer
-        (goto-char (point-min))
-        (re-search-forward "^{")
-        (backward-char)
-        (json-parse-buffer)))))
+  (let ((thread (gethash thread-id elg--thread-id-to-thread-cache)))
+    (if thread
+        thread
+      (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
+             (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
+             (get-thread-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads/" thread-id)))
+        (let ((thread-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-thread-url))))
+          ;;      (message "%s" thread-fetch-response-buffer)
+          (with-current-buffer thread-fetch-response-buffer
+            (goto-char (point-min))
+            (re-search-forward "^{")
+            (backward-char)
+            (let ((json-parse-result (json-parse-buffer)))
+              (puthash thread-id json-parse-result elg--thread-id-to-thread-cache)
+              json-parse-result)))))))
   
 (defun elg-get-conversations-for-labels (labels)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
