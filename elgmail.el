@@ -79,10 +79,11 @@
         (insert "\n")))))
 
 (defun elg--get-subject-from-headers (message-headers)
-  (dolist (one-header first-message-headers)
-    (let ((header-name (gethash "name" one-header)))
-      (when (string-equal header-name "Subject")
-        (gethash "value" one-header)))))
+  (catch 'found-subject
+    (dolist (one-header first-message-headers)
+      (let ((header-name (gethash "name" one-header)))
+        (when (string-equal header-name "Subject")
+          (throw 'found-subject (gethash "value" one-header)))))))
   
 (defun elg-get-thread-by-id (thread-id)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
