@@ -69,10 +69,11 @@
     (split-window-right)
     (switch-to-buffer-other-window conversation-list-buffer)
     (erase-buffer)
-    (dolist (one-conversation conversations)
-      (let* ((one-snippet (gethash "snippet" one-conversation))
+    (dotimes (x (length conversations))
+      (let* ((one-conversation (aref conversations x))
+             (one-snippet (gethash "snippet" one-conversation))
              (complete-thread (elg-get-thread-by-id (gethash "id" one-conversation)))
-             (first-message-headers (gethash "headers" (gethash "payload" (nth 0 (gethash "messages" complete-thread))))))
+             (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" complete-thread) 0)))))
         (insert "\t")
         (insert-button (format "(%d) %s" (length (gethash "messages" complete-thread)) (elg--get-subject-from-headers first-message-headers))
                        'action 'elg-get-and-display-conversation
@@ -81,8 +82,9 @@
 
 (defun elg--get-subject-from-headers (message-headers)
   (catch 'found-subject
-    (dolist (one-header message-headers)
-      (let ((header-name (gethash "name" one-header)))
+    (dotimes (x (length message-headers))
+      (let* ((one-header (aref message-headers x))
+             (header-name (gethash "name" one-header)))
         (when (string-equal header-name "Subject")
           (throw 'found-subject (gethash "value" one-header)))))))
   
@@ -96,7 +98,7 @@
         (goto-char (point-min))
         (re-search-forward "^{")
         (backward-char)
-        (json-parse-buffer :array-type 'list)))))
+        (json-parse-buffer)))))
   
 (defun elg-get-conversations-for-labels (labels)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
@@ -108,7 +110,7 @@
         (goto-char (point-min))
         (re-search-forward "^{")
         (backward-char)
-        (gethash "threads" (json-parse-buffer :array-type 'list))))))
+        (gethash "threads" (json-parse-buffer))))))
 
 (defun elg-login ()
   (setq elg--oauth-token
