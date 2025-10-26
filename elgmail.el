@@ -48,13 +48,14 @@
         (goto-char (point-min))
         (re-search-forward "^{")
         (backward-char)
-        (let* ((label-response-ht (json-parse-buffer :array-type 'list))
+        (let* ((label-response-ht (json-parse-buffer))
                (label-array (gethash "labels" label-response-ht)) ;; the outermost hash table has a
                                                                   ;; key of 'labels' and a value of
                                                                   ;; an array of hash tables
                (final-label-list (list)))
-          (dolist (one-label-ht label-array)
-            (let ((label-name (gethash "name" one-label-ht)))
+          (dotimes (x (length label-array))
+            (let* ((one-label-ht (aref label-array x))
+                   (label-name (gethash "name" one-label-ht)))
               (if (member-ignore-case label-name elg-label-filter)
                   (push `(,(capitalize label-name) . ,label-name) final-label-list))))
           final-label-list)))))
