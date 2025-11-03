@@ -10,10 +10,11 @@
 
 ;;; Commentary:
 
-;; Wrapper for GMail API for Emacs
+;; Wrapper for Gmail API for Emacs
 ;;
-;; The main entry point is `elgmail', which will initialize elgmail, authenticate to Google's OAuth
-;; server if necessary, and show a UI for reading messages.
+;; The main entry point is `elgmail', which will initialize elgmail,
+;; authenticate to Google's OAuth server if necessary, and show a UI
+;; for reading messages.
 
 ;;; Code:
 (require 'oauth2)
@@ -61,14 +62,29 @@
                   (push `(,(capitalize label-name) . ,label-name) final-label-list))))
           final-label-list)))))
 
+(defun elg--configure-window-layout (max-label-length)
+  (delete-other-windows)
+  (split-window-right (ceiling (* max-label-length 1.5)))
+  (other-window 1)
+  (switch-to-buffer "*elgmail conversations*")
+  (split-window-below)
+  (other-window 1)
+  (switch-to-buffer "*elgmail thread*"))
+
+(defun elg-get-and-display-single-conversation (button)
+  (pop-to-buffer "*elgmail thread*")
+  (let* ((thread-id (button-get button 'thread-id))
+         (thread (elg-get-thread-by-id thread-id)))
+    (insert (gethash "snippet" thread))))
+
 (defun elg-get-and-display-conversations-for-label (button)
   (let* ((label-name (button-label button))
          (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
          (server-label-name (cdr label-alist-entry))
          (conversations (elg-get-conversations-for-labels (list server-label-name)))
          (conversation-list-buffer (get-buffer-create "*elgmail conversations*")))
-    (split-window-right)
-    (switch-to-buffer-other-window conversation-list-buffer)
+    (elg--configure-window-layout 25)
+    (pop-to-buffer conversation-list-buffer)
     (erase-buffer)
     (dotimes (x (length conversations))
       (let* ((one-conversation (aref conversations x))
@@ -77,8 +93,8 @@
              (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" complete-thread) 0)))))
         (insert "\t")
         (insert-button (format "(%d) %s" (length (gethash "messages" complete-thread)) (elg--get-subject-from-headers first-message-headers))
-                       'action 'elg-get-and-display-conversation
-                       'conversation-id (gethash "id" one-conversation))
+                       'action 'elg-get-and-display-single-conversation
+                       'thread-id (gethash "id" one-conversation))
         (insert "\n")))))
 
 (defun elg--get-subject-from-headers (message-headers)
