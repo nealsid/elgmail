@@ -73,9 +73,18 @@
 
 (defun elg-get-and-display-single-thread (button)
   (pop-to-buffer "*elgmail thread*")
+  (erase-buffer)
   (let* ((thread-id (button-get button 'thread-id))
-         (thread (elg-get-thread-by-id thread-id)))
-    (insert (gethash "snippet" thread))))
+         (thread (elg-get-thread-by-id thread-id))
+         (messages (gethash "messages" thread)))
+    (dotimes (x (length messages))
+      (let* ((one-msg (aref messages x))
+             (raw-snippet (gethash "snippet" one-msg))
+             (unescaped-html (with-temp-buffer
+                               (insert raw-snippet)
+                               (goto-char (point-min))
+                               (xml-parse-string))))
+        (insert (concat unescaped-html "\n\n"))))))
 
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))
