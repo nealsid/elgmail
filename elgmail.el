@@ -71,21 +71,25 @@
   (other-window 1)
   (switch-to-buffer "*elgmail thread*"))
 
+(defun elg--find-by-mime-type (message-parts-array mimeType)
+  (seq-find (lambda (one-part)
+              (string-equal (gethash "mimeType" one-part) mimeType))
+            message-parts-array))
+
 (defun elg-get-and-display-single-thread (button)
   (pop-to-buffer "*elgmail thread*")
   (erase-buffer)
   (let* ((thread-id (button-get button 'thread-id))
          (thread (elg-get-thread-by-id thread-id))
          (messages (gethash "messages" thread)))
-    (dotimes (x (length messages))
-      (let* ((one-msg (aref messages x))
-             (raw-snippet (gethash "snippet" one-msg))
-             (unescaped-html (with-temp-buffer
-                               (insert raw-snippet)
-                               (goto-char (point-min))
-                               (xml-parse-string))))
-        (insert (concat unescaped-html "\n\n"))))))
-
+    (seq-doseq (one-msg messages)
+      (let* ((array-of-parts (gethash "parts" (gethash "payload" one-msg)))
+             (text-plain-part (elg--find-by-mime-type array-of-parts "text/plain"))
+             (raw-encoded (gethash "data" (gethash "body" text-plain-part)))
+             (raw-decoded (base64-decode-string raw-encoded t))
+             (raw-decoded-transformed (string-replace "" "" raw-decoded)))
+        (insert (concat raw-decoded-transformed "\n\n"))))))
+    
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))
          (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
@@ -102,7 +106,8 @@
         (insert "\t")
         (insert-button (format "(%d) %s" (length (gethash "messages" complete-thread)) (elg--get-subject-from-headers first-message-headers))
                        'action 'elg-get-and-display-single-thread
-                       'thread-id (gethash "id" one-thread))
+                       'thread-id (gethash "id" one-thread)
+                       'thread-fetch-buffer (gethash "buffer-id" complete-thread))
         (insert "\n")))))
 
 (defun elg--get-subject-from-headers (message-headers)
@@ -128,6 +133,7 @@
             (backward-char)
             (let ((json-parse-result (json-parse-buffer)))
               (puthash thread-id json-parse-result elg--thread-id-to-thread-cache)
+              (puthash "buffer-id" (buffer-name thread-fetch-response-buffer) json-parse-result)
               json-parse-result)))))))
   
 (defun elg-get-threads-for-labels (labels)
