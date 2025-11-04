@@ -85,7 +85,10 @@
     (seq-doseq (one-msg messages)
       (let* ((array-of-parts (gethash "parts" (gethash "payload" one-msg)))
              (text-plain-part (elg--find-by-mime-type array-of-parts "text/plain"))
-             (raw-encoded (gethash "data" (gethash "body" text-plain-part)))
+             (text-html-part (elg--find-by-mime-type array-of-parts "text/html"))
+             (raw-encoded (if text-plain-part
+                              (gethash "data" (gethash "body" text-plain-part))
+                            (gethash "data" (gethash "body" text-html-part))))
              (raw-decoded (base64-decode-string raw-encoded t))
              (raw-decoded-transformed (string-replace "" "" raw-decoded)))
         (insert (concat raw-decoded-transformed "\n\n"))))))
@@ -98,6 +101,7 @@
          (thread-list-buffer (get-buffer-create "*elgmail threads*")))
     (elg--configure-window-layout 25)
     (pop-to-buffer thread-list-buffer)
+    (hl-line-mode 1)
     (erase-buffer)
     (dotimes (x (length threads))
       (let* ((one-thread (aref threads x))
