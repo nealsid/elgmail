@@ -97,7 +97,6 @@
     (erase-buffer)
     (dotimes (x (length threads))
       (let* ((one-thread (aref threads x))
-             (one-snippet (gethash "snippet" one-thread))
              (complete-thread (elg-get-thread-by-id (gethash "id" one-thread)))
              (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" complete-thread) 0)))))
         (insert "\t")
