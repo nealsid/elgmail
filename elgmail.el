@@ -71,10 +71,20 @@
   (other-window 1)
   (switch-to-buffer "*elgmail thread*"))
 
-(defun elg--find-by-mime-type (message-parts-array mimeType)
+(defun elg--find-part-by-mime-type (message-parts-array mimeType)
   (seq-find (lambda (one-part)
               (string-equal (gethash "mimeType" one-part) mimeType))
             message-parts-array))
+
+(defun elg--find-body-from-payload (msg-payload)
+  "Find the body from a message payload.  The mime type of the payload is examined.  If it's text/html, we return that body.  If it's multipart/alternative, we find the text/plain part and return that."
+  (let ((payload-mime-type (gethash "mimeType" msg-payload)))
+    (cond ((equal payload-mime-type "multipart/alternative")
+           (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
+             (base64-decode-string (gethash "body" text-plain-part) t)))
+          ((equal payload-mime-type "text/html")
+           (base64-decode-string (gethash "data" (gethash "body" msg-payload)) t))
+          (t nil))))
 
 (defun elg-get-and-display-single-thread (button)
   (pop-to-buffer "*elgmail thread*")
@@ -84,8 +94,8 @@
          (messages (gethash "messages" thread)))
     (seq-doseq (one-msg messages)
       (let* ((array-of-parts (gethash "parts" (gethash "payload" one-msg)))
-             (text-plain-part (elg--find-by-mime-type array-of-parts "text/plain"))
-             (text-html-part (elg--find-by-mime-type array-of-parts "text/html"))
+             (text-plain-part (elg--find-part-by-mime-type array-of-parts "text/plain"))
+             (text-html-part (elg--find-part-by-mime-type array-of-parts "text/html"))
              (raw-encoded (if text-plain-part
                               (gethash "data" (gethash "body" text-plain-part))
                             (gethash "data" (gethash "body" text-html-part))))
