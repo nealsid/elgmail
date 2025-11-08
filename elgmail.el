@@ -102,7 +102,7 @@
              (raw-decoded (base64-decode-string raw-encoded t))
              (raw-decoded-transformed (string-replace "" "" raw-decoded)))
         (insert (concat raw-decoded-transformed "\n\n"))))))
-    
+
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))
          (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
@@ -131,7 +131,7 @@
              (header-name (gethash "name" one-header)))
         (when (string-equal header-name "Subject")
           (throw 'found-subject (gethash "value" one-header)))))))
-  
+
 (defun elg-get-thread-by-id (thread-id)
   (let ((thread (gethash thread-id elg--thread-id-to-thread-cache)))
     (if thread
@@ -149,7 +149,7 @@
               (puthash thread-id json-parse-result elg--thread-id-to-thread-cache)
               (puthash "buffer-id" (buffer-name thread-fetch-response-buffer) json-parse-result)
               json-parse-result)))))))
-  
+
 (defun elg-get-threads-for-labels (labels)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
@@ -184,4 +184,3 @@
       (with-current-buffer label-fetch-response-buffer
         (goto-char (point-min))
         (re-search-forward "HTTP/1.1 200 OK" nil t)))))
-
