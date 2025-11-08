@@ -81,7 +81,7 @@
   (let ((payload-mime-type (gethash "mimeType" msg-payload)))
     (cond ((equal payload-mime-type "multipart/alternative")
            (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
-             (base64-decode-string (gethash "body" text-plain-part) t)))
+             (base64-decode-string (gethash "data"  (gethash "body" text-plain-part)) t)))
           ((equal payload-mime-type "text/html")
            (base64-decode-string (gethash "data" (gethash "body" msg-payload)) t))
           (t nil))))
@@ -93,15 +93,8 @@
          (thread (elg-get-thread-by-id thread-id))
          (messages (gethash "messages" thread)))
     (seq-doseq (one-msg messages)
-      (let* ((array-of-parts (gethash "parts" (gethash "payload" one-msg)))
-             (text-plain-part (elg--find-part-by-mime-type array-of-parts "text/plain"))
-             (text-html-part (elg--find-part-by-mime-type array-of-parts "text/html"))
-             (raw-encoded (if text-plain-part
-                              (gethash "data" (gethash "body" text-plain-part))
-                            (gethash "data" (gethash "body" text-html-part))))
-             (raw-decoded (base64-decode-string raw-encoded t))
-             (raw-decoded-transformed (string-replace "" "" raw-decoded)))
-        (insert (concat raw-decoded-transformed "\n\n"))))))
+      (let* ((body (elg--find-body-from-payload (gethash "payload" one-msg))))
+        (insert (concat body "\n\n"))))))
 
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))
