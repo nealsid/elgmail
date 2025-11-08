@@ -55,9 +55,8 @@
                                                                   ;; key of 'labels' and a value of
                                                                   ;; an array of hash tables
                (final-label-list (list)))
-          (dotimes (x (length label-array))
-            (let* ((one-label-ht (aref label-array x))
-                   (label-name (gethash "name" one-label-ht)))
+          (seq-doseq (one-label-ht label-array)
+            (let* ((label-name (gethash "name" one-label-ht)))
               (if (member-ignore-case label-name elg-label-filter)
                   (push `(,(capitalize label-name) . ,label-name) final-label-list))))
           final-label-list)))))
@@ -106,9 +105,8 @@
     (pop-to-buffer thread-list-buffer)
     (hl-line-mode 1)
     (erase-buffer)
-    (dotimes (x (length threads))
-      (let* ((one-thread (aref threads x))
-             (complete-thread (elg-get-thread-by-id (gethash "id" one-thread)))
+    (seq-doseq (one-thread threads)
+      (let* ((complete-thread (elg-get-thread-by-id (gethash "id" one-thread)))
              (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" complete-thread) 0)))))
         (insert "\t")
         (insert-button (format "(%d) %s" (length (gethash "messages" complete-thread)) (elg--get-subject-from-headers first-message-headers))
@@ -119,9 +117,8 @@
 
 (defun elg--get-subject-from-headers (message-headers)
   (catch 'found-subject
-    (dotimes (x (length message-headers))
-      (let* ((one-header (aref message-headers x))
-             (header-name (gethash "name" one-header)))
+    (seq-doseq (one-header message-headers)
+      (let* ((header-name (gethash "name" one-header)))
         (when (string-equal header-name "Subject")
           (throw 'found-subject (gethash "value" one-header)))))))
 
