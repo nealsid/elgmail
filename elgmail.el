@@ -75,6 +75,16 @@
               (string-equal (gethash "mimeType" one-part) mimeType))
             message-parts-array))
 
+(defun elg--find-body (msg-payload)
+  "Find the body from a message payload.  The return value is a cons cell of (mime-type . base64-encoded body)."
+  (let ((payload-mime-type (gethash "mimeType" msg-payload)))
+    (cond ((equal payload-mime-type "multipart/alternative")
+           (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
+             (cons "text/plain" text-plain-part)))
+          (t (cl-assert (or (equal payload-mime-type "text/plain")
+                            (equal payload-mime-type "text/html")))
+             (cons payload-mime-type (gethash "data" (gethash "body" msg-payload)))))))
+  
 (defun elg--find-body-from-payload (msg-payload)
   "Find the body from a message payload.  The mime type of the payload is examined.  If it's text/html, we return that body.  If it's multipart/alternative, we find the text/plain part and return that."
   (let ((payload-mime-type (gethash "mimeType" msg-payload)))
