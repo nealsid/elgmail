@@ -81,7 +81,12 @@
     (cond ((equal payload-mime-type "multipart/alternative")
            (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
              (base64-decode-string (gethash "data"  (gethash "body" text-plain-part)) t)))
-          ((or (equal payload-mime-type "text/html") (equal payload-mime-type "text/plain"))
+          ((equal payload-mime-type "text/html")
+           (with-temp-buffer
+             (insert (base64-decode-string (gethash "data" (gethash "body" msg-payload)) t))
+             (shr-render-region (point-min) (point-max))
+             (buffer-substring (point-min) (point-max))))
+          ((equal payload-mime-type "text/plain")
            (base64-decode-string (gethash "data" (gethash "body" msg-payload)) t))
           (t nil))))
 
