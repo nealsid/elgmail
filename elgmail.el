@@ -81,7 +81,7 @@
     (cond ((equal payload-mime-type "multipart/alternative")
            (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
              (base64-decode-string (gethash "data"  (gethash "body" text-plain-part)) t)))
-          ((equal payload-mime-type "text/html")
+          ((or (equal payload-mime-type "text/html") (equal payload-mime-type "text/plain"))
            (base64-decode-string (gethash "data" (gethash "body" msg-payload)) t))
           (t nil))))
 
