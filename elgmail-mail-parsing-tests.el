@@ -20,7 +20,7 @@
 (ert-deftest elg-text-html-email-test ()
   (message "%s" default-directory)
   (with-temp-buffer
-    (insert-file "testdata/mimetype-plain-html-one-email.json")
+    (insert-file "testdata/mimetype-text-html-one-email.json")
     (let* ((email-response (json-parse-buffer))
            (body (elg--find-body (gethash "payload" email-response))))
       (should (equal (car body) "text/html")))))
