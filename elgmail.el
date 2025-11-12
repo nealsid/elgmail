@@ -71,16 +71,23 @@
   (switch-to-buffer "*elgmail thread*"))
 
 (defun elg--find-part-by-mime-type (message-parts-array mimeType)
-  (seq-find (lambda (one-part)
-              (string-equal (gethash "mimeType" one-part) mimeType))
-            message-parts-array))
+  "Given an array of message parts, find one with the matching mimeType.  If we have a part with a mime type of multipart/alternative, search its subarray of parts for the matching mime type."
+  (let ((alternative-subpart (seq-find (lambda (one-part)
+                                         (string-equal (gethash "mimeType" one-part) "multipart/alternative"))
+                                       message-parts-array)))
+    (if alternative-subpart
+        (elg--find-part-by-mime-type (gethash "parts" alternative-subpart) mimeType)
+      (seq-find (lambda (one-part)
+                  (string-equal (gethash "mimeType" one-part) mimeType))
+                message-parts-array))))
 
 (defun elg--find-body (msg-payload)
   "Find the body from a message payload.  The return value is a cons cell of (mime-type . base64-encoded body)."
   (let ((payload-mime-type (gethash "mimeType" msg-payload)))
-    (cond ((equal payload-mime-type "multipart/alternative")
+    (cond ((or (equal payload-mime-type "multipart/alternative")
+               (equal payload-mime-type "multipart/mixed"))
            (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
-             (cons "text/plain" text-plain-part)))
+             (cons "text/plain" (gethash "data" (gethash "body" text-plain-part)))))
           (t (cl-assert (or (equal payload-mime-type "text/plain")
                             (equal payload-mime-type "text/html")))
              (cons payload-mime-type (gethash "data" (gethash "body" msg-payload)))))))
@@ -107,8 +114,16 @@
          (thread (elg-get-thread-by-id thread-id))
          (messages (gethash "messages" thread)))
     (seq-doseq (one-msg messages)
-      (let* ((body (elg--find-body-from-payload (gethash "payload" one-msg))))
-        (insert (concat body "\n\n"))))))
+      (let* ((mimetype-and-body (elg--find-body (gethash "payload" one-msg)))
+             (body-string (pcase (car mimetype-and-body)
+                            ("text/html" (with-temp-buffer
+                                           (insert (base64-decode-string (cdr mimetype-and-body) t))
+                                           (shr-render-region (point-min) (point-max))
+                                           (buffer-substring (point-min) (point-max))))
+                            ("text/plain" (string-replace "" ""
+                                                          (base64-decode-string (cdr mimetype-and-body) t))))))
+
+        (insert (concat body-string "\n\n"))))))
 
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))

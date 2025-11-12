@@ -18,9 +18,15 @@
 (require 'ert)
 
 (ert-deftest elg-text-html-email-test ()
-  (message "%s" default-directory)
   (with-temp-buffer
     (insert-file "testdata/mimetype-text-html-one-email.json")
     (let* ((email-response (json-parse-buffer))
            (body (elg--find-body (gethash "payload" (aref (gethash "messages" email-response) 0)))))
       (should (equal (car body) "text/html")))))
+
+(ert-deftest elg-multipart-mixed-multipart-alternatives-email-test ()
+  (with-temp-buffer
+    (insert-file "testdata/mimetype-multipart-mixed-and-alternatives.json")
+    (let* ((email-response (json-parse-buffer))
+           (body (elg--find-body (gethash "payload" (aref (gethash "messages" email-response) 0)))))
+      (should (equal (car body) "text/plain")))))
