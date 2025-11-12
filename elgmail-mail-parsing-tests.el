@@ -22,5 +22,5 @@
   (with-temp-buffer
     (insert-file "testdata/mimetype-text-html-one-email.json")
     (let* ((email-response (json-parse-buffer))
-           (body (elg--find-body (gethash "payload" email-response))))
+           (body (elg--find-body (gethash "payload" (aref (gethash "messages" email-response) 0)))))
       (should (equal (car body) "text/html")))))
