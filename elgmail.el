@@ -110,6 +110,7 @@
 (defun elg-get-and-display-single-thread (button)
   (pop-to-buffer "*elgmail thread*")
   (erase-buffer)
+  (set-buffer-file-coding-system 'utf-8)
   (let* ((thread-id (button-get button 'thread-id))
          (thread (elg-get-thread-by-id thread-id))
          (messages (gethash "messages" thread)))
@@ -123,7 +124,8 @@
                             ("text/plain" (string-replace "" ""
                                                           (base64-decode-string (cdr mimetype-and-body) t))))))
 
-        (insert (concat body-string "\n\n"))))))
+        (insert (concat body-string "\n\n"))
+        (insert "-=-=-=-=-=-=-=-=-=-=-=\n\n")))))
 
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))
@@ -152,9 +154,9 @@
         (when (string-equal header-name "Subject")
           (throw 'found-subject (gethash "value" one-header)))))))
 
-(defun elg-get-thread-by-id (thread-id)
+(defun elg-get-thread-by-id (thread-id &optional no-cache)
   (let ((thread (gethash thread-id elg--thread-id-to-thread-cache)))
-    (if thread
+    (if (and thread (not no-cache))
         thread
       (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
              (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
