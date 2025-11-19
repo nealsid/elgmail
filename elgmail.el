@@ -173,10 +173,11 @@
               (puthash "buffer-id" (buffer-name thread-fetch-response-buffer) json-parse-result)
               json-parse-result)))))))
 
-(defun elg-get-threads-for-labels (labels)
+(defun elg-get-threads-for-labels (labels &optional max-results)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
-         (get-convo-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=" (string-join labels ","))))
+         (num-results (if max-results max-results 100))
+         (get-convo-url (format "https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=%s&maxResults=%d" (string-join labels ",") num-results)))
     (let* ((convo-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-convo-url))))
       (message "%s" convo-fetch-response-buffer)
       (with-current-buffer convo-fetch-response-buffer
