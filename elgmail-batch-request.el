@@ -9,3 +9,11 @@ GET /gmail/v1/users/me/labels
 
 --elgmailboundary--"))
   (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1"))
+
+(defun elgperf-fetch-threads-individually ()
+  (let ((threads (elg-get-threads-for-labels '("INBOX"))))
+    (message "%d threads" (length threads))
+    (seq-doseq (one-thread threads)
+      (elg-get-thread-by-id (gethash "id" one-thread)))))
+(benchmark-run 10
+  (elgperf-fetch-threads-individually))
