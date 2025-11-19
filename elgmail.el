@@ -175,7 +175,7 @@
 
 (defun elg-get-threads-for-labels (labels &optional max-results)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
-         (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
+         (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" gmail-api-access-token))));;,(concat "Bearer " gmail-api-access-token))))
          (num-results (if max-results max-results 100))
          (get-convo-url (format "https://gmail.googleapis.com/gmail/v1/users/me/threads?labelIds=%s&maxResults=%d" (string-join labels ",") num-results)))
     (let* ((convo-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-convo-url))))
