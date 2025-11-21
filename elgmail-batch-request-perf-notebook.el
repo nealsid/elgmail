@@ -38,12 +38,29 @@ GET /gmail/v1/users/me/threads/%s
         (with-current-buffer result-buffer
           (goto-char (point-min))
           (re-search-forward "^HTTP/1.1 \\([0-9]+\\)")
-          (if (equal (match-string 1) "200")
-              (progn
-                (re-search-forward "^content-type: multipart/mixed; boundary=\\([A-z0-9]+\\)")
-                (message "boundary: %s" (match-string 1)))))))))
+          (when (equal (match-string 1) "200")
+            ;; the regexp to match the boundary is too permissive, but
+            ;; expressing only the allowed characters is too complex
+            ;; (something like printable ascii characters, no spaces)
+            (when (re-search-forward "^content-type: multipart/mixed; boundary=\\(.+\\)" nil t)
+              (let ((boundary-marker (concat "--" (match-string 1)))
+                    (results-ht (make-hash-table)))
+                (puthash "200" (list) results-ht)
+                ;; Now that we've found the boundary string, iterate
+                ;; while it is found and parse the response
+                ;; immediately after it.
+                (while (re-search-forward (concat "^" boundary-marker "") nil t)
+                  (re-search-forward "HTTP/1.1 \\([0-9]+\\)")
+                  (if (not (equal (match-string 1) "200"))
+                      (cl-incf (gethash (match-string 1) results-ht 0))
+                    (re-search-forward "^{")
+                    (backward-char)
+                    (let ((json-begin (point)))
+                      (re-search-forward "^}")
+                      (push (json-parse-string (buffer-substring json-begin (point))) (gethash "200" results-ht)))))))))))))
             
 (elg-fetch-threads-by-id-batch '("199ea159ca464d4b"))
+(elg-fetch-threads-by-id-batch gmail-thread-ids)
 
 (defun elgperf-fetch-threads-batch-request ()
   (let ((threads (elg-get-threads-for-labels '("INBOX") 50))
@@ -71,3 +88,6 @@ GET /gmail/v1/users/me/threads/%s
 (let ((gc-cons-threshold 999999999)
       (url-debug t))
   (elgperf-fetch-threads-batch-request))
+
+(setq gmail-threads (elg-get-threads-for-labels '("INBOX") 5))
+(setq gmail-thread-ids (mapcar (lambda (gmail-thread) (gethash "id" gmail-thread)) gmail-threads))
