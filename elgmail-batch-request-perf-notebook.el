@@ -24,16 +24,14 @@ GET /gmail/v1/users/me/threads/%s
 
 (defun elg-fetch-threads-by-id-batch (thread-ids)
   "Fetch thread data using Google's batch request server.  The batch request server accepts multiple requests inside a container request, in order to minimize connections & API calls to the server.  THREAD-IDS is a list of thread ids, which are strings."
-  (let ((individual-request-bodies (list)))
-    ;; First iterate over the thread ids given to us and create a
-    ;; bunch of request bodies.
-    (seq-doseq (one-thread-id thread-ids)
-      (push (format elgperf-embedded-http-request-format-string one-thread-id one-thread-id) individual-request-bodies))
-    (let ((url-debug t)
-          (url-request-method "POST")
-          (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
-                                       ("Content-Type" . "multipart/mixed; boundary=elgmailboundary")))
-          (url-request-data (concat (string-join individual-request-bodies "") "--elgmailboundary--")))
+    (let* ((individual-request-bodies (mapcar (lambda (thread-id)
+                                               (format elgperf-embedded-http-request-format-string thread-id thread-id))
+                                             thread-ids))
+           (url-debug t)
+           (url-request-method "POST")
+           (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
+                                        ("Content-Type" . "multipart/mixed; boundary=elgmailboundary")))
+           (url-request-data (concat (string-join individual-request-bodies "") "--elgmailboundary--")))
       (let ((result-buffer (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
         (message "buffer: %s" result-buffer)
         (with-current-buffer result-buffer
@@ -59,8 +57,7 @@ GET /gmail/v1/users/me/threads/%s
                     (let ((json-begin (point)))
                       (re-search-forward "^}")
                       (push (json-parse-string (buffer-substring json-begin (point))) (gethash "200" results-ht)))))
-                results-ht))))))))
-            
+                results-ht)))))))
 
 (defun elgperf-fetch-threads-batch-request ()
   (let ((threads (elg-get-threads-for-labels '("INBOX") 50))
