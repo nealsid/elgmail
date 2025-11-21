@@ -12,6 +12,7 @@ GET /gmail/v1/users/me/labels
 
 (defvar elgperf-embedded-http-request-format-string "--elgmailboundary
 Content-Type: application/http
+Content-ID: %s
 
 GET /gmail/v1/users/me/threads/%s
 
@@ -27,8 +28,9 @@ GET /gmail/v1/users/me/threads/%s
     ;; First iterate over the thread ids given to us and create a
     ;; bunch of request bodies.
     (seq-doseq (one-thread-id thread-ids)
-      (push (format elgperf-embedded-http-request-format-string one-thread-id) individual-request-bodies))
-    (let ((url-request-method "POST")
+      (push (format elgperf-embedded-http-request-format-string one-thread-id one-thread-id) individual-request-bodies))
+    (let ((url-debug t)
+          (url-request-method "POST")
           (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
                                        ("Content-Type" . "multipart/mixed; boundary=elgmailboundary")))
           (url-request-data (concat (string-join individual-request-bodies "") "--elgmailboundary--")))
@@ -99,6 +101,11 @@ GET /gmail/v1/users/me/threads/%s
 (5.114594 9 0.7195630000000008)
 ;;(4.714735 11 0.8250339999999987)
 
+gmail-thread-ids
+("19aa8664db5de1bf" "19aa7b70fe9fff93" "19aa74fdd7236975" "19a9fb7ca5211907" "19a74f805f3391f0" "19a9ce820ff5ea2b" "19a9a42aecf61d95" "19a9777f9b6583c2" "19a4f1449b7737df" "19a97ff2c4bbeae8" "19a97f9b7967cedb" "19a83af07d836c49" "19a8a19c15b848f6" "19a8aeb5db81f48b" "19a89ad182fb93a6" "19a8842087390970" "19a816bc47490e88" "19a613441078946a" "19a7ed38cac1fc19" "19a7901a665c5ff8" "19a74d5819d0a57e" "19a6b4d00be8d0e2" "19a5edcfaf037674" "19a6145cd95d5631" "19a5c9b773673e58" "19a570aef6ab9a98" "19a4f34e2bf6c959" "19a2c320bc0deeaf" "199ef98b943670b3" "19a18968cca2224a" "19a17c05daeab4ac" "19a137d00e7d731c" "19a132daebf2efe0" "19939fdb514904b9" "19a0e7cf495f4810" "19a0e293d26f17bc" "19a0d5d86bb60d00" "19a0b49f55708a75" "19a079a58f3409a2" "19a09822d9ec3fff")
+(seq-doseq (id gmail-thread-ids)
+  id)
+("19aa8664db5de1bf" "19aa7b70fe9fff93" "19aa74fdd7236975" "19a9fb7ca5211907" "19a74f805f3391f0" "19a9ce820ff5ea2b" "19a9a42aecf61d95" "19a9777f9b6583c2" "19a4f1449b7737df" "19a97ff2c4bbeae8" "19a97f9b7967cedb" "19a83af07d836c49" "19a8a19c15b848f6" "19a8aeb5db81f48b" "19a89ad182fb93a6" "19a8842087390970" "19a816bc47490e88" "19a613441078946a" "19a7ed38cac1fc19" "19a7901a665c5ff8" "19a74d5819d0a57e" "19a6b4d00be8d0e2" "19a5edcfaf037674" "19a6145cd95d5631" "19a5c9b773673e58" "19a570aef6ab9a98" "19a4f34e2bf6c959" "19a2c320bc0deeaf" "199ef98b943670b3" "19a18968cca2224a" "19a17c05daeab4ac" "19a137d00e7d731c" "19a132daebf2efe0" "19939fdb514904b9" "19a0e7cf495f4810" "19a0e293d26f17bc" "19a0d5d86bb60d00" "19a0b49f55708a75" "19a079a58f3409a2" "19a09822d9ec3fff")
 (seq-doseq (tid gmail-thread-ids)
   (elg-get-thread-by-id tid t))
 
