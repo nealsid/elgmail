@@ -22,9 +22,19 @@
                       "GET /gmail/v1/users/me/thread/05"))
          (inner-requests (elgbatch-create-nested-requests api-calls)))
     (seq-map-indexed (lambda (one-request idx)
-                       (should (equal (format "Content-Type: application/http
+                       (should (equal (format "--elgbatchboundary
+Content-Type: application/http
 
 GET /gmail/v1/users/me/thread/%02d
 
 " (1+ idx)) one-request))) inner-requests)))
     
+(ert-deftest elgbatch-send-5-nested-requests ()
+  (let* ((api-calls '("GET /gmail/v1/users/me/thread/01"
+                      "GET /gmail/v1/users/me/thread/02"
+                      "GET /gmail/v1/users/me/thread/03"
+                      "GET /gmail/v1/users/me/thread/04"
+                      "GET /gmail/v1/users/me/thread/05")))
+    (elgbatch-send-batch-request api-calls)))
+
+  
