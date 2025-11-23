@@ -159,7 +159,8 @@
   (let ((thread (gethash thread-id elg--thread-id-to-thread-cache)))
     (if (and thread (not no-cache))
         thread
-      (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
+      (let* ((url-debug t)
+             (gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
              (url-request-extra-headers `(("Authorization" . ,(concat "Bearer " gmail-api-access-token))))
              (get-thread-url (concat "https://gmail.googleapis.com/gmail/v1/users/me/threads/" thread-id)))
         (let ((thread-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-thread-url))))
