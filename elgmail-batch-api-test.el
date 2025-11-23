@@ -22,8 +22,7 @@
                       "GET /gmail/v1/users/me/thread/05"))
          (inner-requests (elgbatch-create-nested-requests api-calls)))
     (seq-map-indexed (lambda (one-request idx)
-                       (should (equal (format "--elgbatchboundary
-Content-Type: application/http
+                       (should (equal (format "Content-Type: application/http
 
 GET /gmail/v1/users/me/thread/%02d
 
