@@ -33,7 +33,8 @@ GET /gmail/v1/users/me/thread/%02d
                      "GET /gmail/v1/users/me/thread/02"
                      "GET /gmail/v1/users/me/thread/03"
                      "GET /gmail/v1/users/me/thread/04"
-                     "GET /gmail/v1/users/me/thread/05")))
+                     "GET /gmail/v1/users/me/thread/05"))
+        (url-advice-name "elg-url-retrieve-test-advice"))
     (unwind-protect
         (progn
           (advice-add 'url-retrieve-synchronously :override
@@ -71,8 +72,8 @@ GET /gmail/v1/users/me/thread/05
 " nil t))
                           (should (equal (point) (point-max))))
                         (get-buffer-create " *elg-test-scratch-buffer*"))
-                      '((name . "elg-url-retrieve-test-advice")))
+                      `((name . ,url-advice-name)))
           (elgbatch-send-batch-request api-calls))
-      (advice-remove 'url-retrieve-synchronously "elg-url-retrieve-test-advice"))))
+      (advice-remove 'url-retrieve-synchronously url-advice-name))))
 
   
