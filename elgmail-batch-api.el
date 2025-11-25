@@ -43,7 +43,7 @@
         (message "buffer: %s" result-buffer)
         (with-current-buffer result-buffer
           (goto-char (point-min))
-          (re-search-forward "^HTTP/1.1 \\([0-9]+\\)")
+          (re-search-forward "^HTTP/1.1 \\([0-9]+\\)" nil t)
           (when (equal (match-string 1) "200")
             ;; the regexp to match the boundary is too permissive, but
             ;; expressing only the allowed characters is too complex
