@@ -17,17 +17,35 @@
 
 (defvar elgbatch-boundary-string "elgbatchboundary" "The string that is used to construct the nested request boundary")
 
-(defvar elgbatch-nested-request-format-string "Content-Type: application/http
+(defvar elgbatch-nested-request-format-string (format "--%s
+Content-Type: application/http
+Content-ID: %%s
 
-%s
+%%s\n\n" elgbatch-boundary-string)
+  "The format string used to construct each inner request. The string is passed to `format` at definition time, as well as at run-time, which is why some format specifiers have double percent signs. ")
 
-"
-  "The format string used to construct each inner request.")
+(defun elgbatch-create-nested-requests (request-hts)
+  (seq-map (lambda (ht)
+             (format elgbatch-nested-request-format-string (gethash "id" ht) (gethash "request" ht)))
+           request-hts))
+  
+(defun elgbatch-auth-and-content-type-headers ()
+  `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
+    ("Content-Type" . ,(format "multipart/mixed; boundary=%s" elgbatch-boundary-string))))
 
-(defun elgbatch-create-nested-requests (requests)
-  (mapcar (lambda (one-request)
-            (format elgbatch-nested-request-format-string one-request))
-          requests))
+(defun elgbatch-send-batch-request-v2 (request-hts)
+  "Issue request to Google's batch request server.  Requests is a list of hash tables.  Each hash table has keys \"id\" which is a unique ID for the request (unique within the list) and \"request\" which is the HTTP request, without headers, corresponding to the API call, such as a string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of the retry mechanism requests."
+  (let ((url-request-data (concat (string-join (elgbatch-create-nested-requests request-hts)) (format "--%s--" elgbatch-boundary-string)))
+        (url-debug t)
+        (url-request-method "POST")
+        (url-request-extra-headers (elgbatch-auth-and-content-type-headers)))
+    (let ((result-buffer (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
+      ;; Steps are
+      ;; 1) verify 200 ok on outer batch reseponse
+      ;; 2) Parse bounder marker from outer batch response
+      ;; 3) Iterate over nested responses and set hash table entry for response code as well as response if the code was 200
+      ;; 4) For responses that were 429, retry with another batch request.
+      result-buffer)))
   
 (defun elgbatch-send-batch-request (requests)
   "Issue request to Google's batch request server.  Google's batch request server accepts multiple nested requests inside a container request, in order to minimize connections & API calls to the server.  To use, pass in a list of requests, each of the form of a string in the format: \"<VERB> <PATH>\"."
