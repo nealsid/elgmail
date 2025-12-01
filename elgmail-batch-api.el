@@ -69,10 +69,8 @@ the boundary marker for nested responses."
                                ;; after the boundary marker
         (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
                   (one-nested-response-text (buffer-substring (mark) (point)))
-                  (response-id (progn
-                                 (message "%s" one-nested-response-text)
-                                 (string-match "^\\(Content-ID\\): \\(response-[^\n]+\\)\n" one-nested-response-text)
-                                 (match-string 1))))
+                  (content-id-start (string-match "Content-ID: response-\\(.*\\)\n" one-nested-response-text))
+                  (response-id (match-string 1 one-nested-response-text)))
             (funcall f one-nested-response-text response-id))))))
 
 (defun elgbatch-send-batch-request-v2 (request-hts)
