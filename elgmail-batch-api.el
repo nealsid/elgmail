@@ -33,22 +33,66 @@ Content-ID: %%s
   `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
     ("Content-Type" . ,(format "multipart/mixed; boundary=%s" elgbatch-boundary-string))))
 
-(defun elgbatch-send-batch-request-v2 (request-hts)
-  "Issue request to Google's batch request server.  Requests is a list of hash tables.  Each hash table has keys \"id\" which is a unique ID for the request (unique within the list) and \"request\" which is the HTTP request, without headers, corresponding to the API call, such as a string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of the retry mechanism requests."
+(defun validate-batch-response-and-get-boundary-marker (response-buffer)
+  (with-current-buffer response-buffer
+    (goto-char (point-min))
+    (re-search-forward "^HTTP/1.1 \\([0-9]+\\)" nil t)
+    (if (equal (match-string 1) "200")
+        (when (re-search-forward "^content-type: multipart/mixed; boundary=\\(.+\\)" nil t)
+          (cons "200" (match-string 1)))
+      (cons (match-string 1) nil))))
+
+(defun extract-batch-response-boundary-marker (response-buffer)
+  (with-current-buffer response-buffer
+    (when (re-search-forward "^content-type: multipart/mixed; boundary=\\(.+\\)" nil t)
+      (match-string 1))))
+
+(defun elgbatch-issue-batch-request (request-hts)
   (let ((url-request-data (concat (string-join (elgbatch-create-nested-requests request-hts)) (format "--%s--" elgbatch-boundary-string)))
         (url-debug t)
         (url-request-method "POST")
         (url-request-extra-headers (elgbatch-auth-and-content-type-headers)))
-    (let ((result-buffer (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
-      ;; Steps are
-      ;; 1) verify 200 ok on outer batch reseponse
-      ;; 2) Parse bounder marker from outer batch response
+    (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
+
+(defun elg-map-nested-responses (f response-buffer boundary-marker)
+  "Given a buffer containing a response from Google's batch server, iterate
+over the nested responses and call a function for each one.  F is a
+function to call and should accept the following parameters <FILL IN>.
+RESPONSE-BUFFER is a buffer containing the response from Google's
+server.  BOUNDARY-MARKER is a string that Google's server returned as
+the boundary marker for nested responses."
+  (with-current-buffer response-buffer
+    (while (re-search-forward (concat "^--" boundary-marker "") nil t)
+      (save-excursion
+        (set-mark-command nil) ;; set the mark at the beginning of the
+                               ;; headers of nested response, right
+                               ;; after the boundary marker
+        (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
+                  (one-nested-response-text (buffer-substring (mark) (point)))
+                  (response-id (progn
+                                 (message "%s" one-nested-response-text)
+                                 (string-match "^\\(Content-ID\\): \\(response-[^\n]+\\)\n" one-nested-response-text)
+                                 (match-string 1))))
+            (funcall f one-nested-response-text response-id))))))
+
+(defun elgbatch-send-batch-request-v2 (request-hts)
+  "Issue request to Google's batch request server.  Requests is a list of hash tables.  Each hash table has keys \"id\" which is a unique ID for the request (unique within the list) and \"request\" which is the HTTP request, without headers, corresponding to the API call, such as a string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of the retry mechanism requests."
+  (let ((response-buffer (elgbatch-issue-batch-request request-hts)))
+    (message "%s" response-buffer)
+    ;; Steps are
+    ;; 1) verify 200 ok on outer batch reseponse and extract boundary marker.
+    (if-let* ((validation-result (validate-batch-response-and-get-boundary-marker response-buffer))
+              (boundary-marker (cdr validation-result)))
+        (elg-map-nested-responses (lambda (response-text content-id)
+                                    (message "hello: %s" content-id))
+                                  response-buffer
+                                  boundary-marker)
+      nil)))
       ;; 3) Iterate over nested responses and set hash table entry for response code as well as response if the code was 200
       ;; 4) For responses that were 429, retry with another batch request.
-      result-buffer)))
   
 (defun elgbatch-send-batch-request (requests)
-  "Issue request to Google's batch request server.  Google's batch request server accepts multiple nested requests inside a container request, in order to minimize connections & API calls to the server.  To use, pass in a list of requests, each of the form of a string in the format: \"<VERB> <PATH>\"."
+  "Issue request to Google's batch request server.  Google's batch request server accepts multiple nested requests inside a container request, in order to minimize connections to the server.  To use, pass in a list of requests, each of the form of a string in the format: \"<VERB> <PATH>\"."
     (let* ((individual-request-bodies (elgbatch-create-nested-requests requests))
            (url-debug t)
            (url-request-method "POST")
