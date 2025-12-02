@@ -55,16 +55,12 @@ Content-ID: %%s
     (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
 
 (defun elg-extract-content-id (one-response-text)
-  (if-let* ((content-id-start (string-match "Content-ID: response-\\(.*\\)\n" one-response-text))
-            (response-id (match-string 1 one-response-text)))
-      response-id
-    nil))
+  (and (string-match "Content-ID: response-\\(.*\\)\n" one-response-text)
+       (match-string 1 one-response-text)))
 
 (defun elg-extract-http-code (one-response-text)
-  (if-let* ((response-code-start (string-match "HTTP/1.1 \\([0-9]+\\)" one-response-text))
-            (response-code (match-string 1 one-response-text)))
-      response-code
-    nil))
+  (and (string-match "HTTP/1.1 \\([0-9]+\\)" one-response-text)
+       (match-string 1 one-response-text)))
       
 (defun elg-map-nested-responses (f response-buffer boundary-marker)
   "Given a buffer containing a response from Google's batch server, iterate

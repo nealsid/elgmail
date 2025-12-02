@@ -139,6 +139,13 @@
     (hl-line-mode 1)
     (erase-buffer)
     (seq-doseq (one-thread threads)
+      (let ((thread-id (get-hash "id" one-thread))
+            (request-hts (list)))
+        (push (make-hash-table) request-hts)
+        (puthash "id" thread-id (nth 0 request-hts))
+        (puthash "request"
+        
+    (seq-doseq (one-thread threads)
       (let* ((complete-thread (elg-get-thread-by-id (gethash "id" one-thread)))
              (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" complete-thread) 0)))))
         (insert "\t")
