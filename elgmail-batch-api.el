@@ -94,6 +94,13 @@ the boundary marker for nested responses."
                 (funcall f nested-response-http-code response-id response-parsed response-index))))
         (cl-incf response-index)))))
 
+(defun elgbatch-make-response-ht (response-id response-code response-parsed)
+  (let ((response-ht (make-hash-table :test 'equal)))
+    (puthash "response-id" response-id response-ht)
+    (puthash "response-code" response-code response-ht)
+    (puthash "response" response-parsed response-ht)
+    response-ht))
+
 (defun elgbatch-send-batch-request (request-hts)
   "Issue request to Google's batch request server.  REQUEST-HTS is a list
 of hash tables.  Each hash table has keys \"id\" which is a unique ID
@@ -102,7 +109,7 @@ HTTP request, without headers, corresponding to the API call, such as a
 string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of
 the retry mechanism requests."
   (let ((response-buffer (elgbatch-issue-batch-request request-hts))
-        (results-hts (list)))
+        (response-hts (list)))
     (message "%s" response-buffer)
     ;; Steps are
     ;; 1) verify 200 ok on outer batch response and extract boundary marker.
@@ -110,14 +117,10 @@ the retry mechanism requests."
               (boundary-marker (cdr validation-result)))
         (elg-map-nested-responses (lambda (response-code response-id parsed-response r-idx)
                                     (message "%s got code %s %s %d" response-id response-code parsed-response r-idx)
-                                    (let ((result-ht (make-hash-table :test 'equal)))
-                                      (puthash "response-id" response-id result-ht)
-                                      (puthash "response-code" response-code result-ht)
-                                      (puthash "response" parsed-response result-ht)
-                                      (push result-ht results-hts)))
+                                    (push (elgbatch-make-response-ht response-id response-code parsed-response) response-hts))
                                   response-buffer
                                   boundary-marker))
-      results-hts))
+      (nreverse response-hts)))
       ;; 3) Iterate over nested responses and set hash table entry for response code as well as response if the code was 200
       ;; 4) For responses that were 429, retry with another batch request.
   
