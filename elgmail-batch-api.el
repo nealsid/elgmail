@@ -73,13 +73,17 @@ the boundary marker for nested responses."
     (let ((response-index 0))
       (while (re-search-forward (concat "^--" boundary-marker "") nil t)
         (save-excursion
-          (set-mark-command nil) ;; set the mark at the beginning of the
-          ;; headers of nested response, right
-          ;; after the boundary marker
+          (set-mark-command nil) ;; set the mark at the beginning of
+                                 ;; the headers of nested response,
+                                 ;; right after the boundary marker
           (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
                     (one-nested-response-text (buffer-substring (mark) (point)))
                     (response-id (elg-extract-content-id one-nested-response-text))
                     (nested-response-http-code (elg-extract-http-code one-nested-response-text)))
+              ;; We should have some error handling here, but, even in
+              ;; the case when the HTTP code is not 200 (such as 401),
+              ;; a JSON string is returned in the response body, so we
+              ;; can proceed with parsing it.
               (let* ((json-begin (string-match "^{\n" one-nested-response-text))
                      ;; Below, we use (1+) because string-match returns
                      ;; the position of the beginning of the match and
@@ -91,18 +95,29 @@ the boundary marker for nested responses."
         (cl-incf response-index)))))
 
 (defun elgbatch-send-batch-request (request-hts)
-  "Issue request to Google's batch request server.  REQUEST-HTS is a list of hash tables.  Each hash table has keys \"id\" which is a unique ID for the request (unique within the list) and \"request\" which is the HTTP request, without headers, corresponding to the API call, such as a string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of the retry mechanism requests."
-  (let ((response-buffer (elgbatch-issue-batch-request request-hts)))
+  "Issue request to Google's batch request server.  REQUEST-HTS is a list
+of hash tables.  Each hash table has keys \"id\" which is a unique ID
+for the request (unique within the list) and \"request\" which is the
+HTTP request, without headers, corresponding to the API call, such as a
+string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of
+the retry mechanism requests."
+  (let ((response-buffer (elgbatch-issue-batch-request request-hts))
+        (results-hts (list)))
     (message "%s" response-buffer)
     ;; Steps are
-    ;; 1) verify 200 ok on outer batch reseponse and extract boundary marker.
+    ;; 1) verify 200 ok on outer batch response and extract boundary marker.
     (if-let* ((validation-result (validate-batch-response-and-get-boundary-marker response-buffer))
               (boundary-marker (cdr validation-result)))
         (elg-map-nested-responses (lambda (response-code response-id parsed-response r-idx)
-                                    (message "%s got code %s %s %d" response-id response-code parsed-response r-idx))
+                                    (message "%s got code %s %s %d" response-id response-code parsed-response r-idx)
+                                    (let ((result-ht (make-hash-table :test 'equal)))
+                                      (puthash "response-id" response-id result-ht)
+                                      (puthash "response-code" response-code result-ht)
+                                      (puthash "response" parsed-response result-ht)
+                                      (push result-ht results-hts)))
                                   response-buffer
-                                  boundary-marker)
-      nil)))
+                                  boundary-marker))
+      results-hts))
       ;; 3) Iterate over nested responses and set hash table entry for response code as well as response if the code was 200
       ;; 4) For responses that were 429, retry with another batch request.
   
