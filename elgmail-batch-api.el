@@ -70,29 +70,27 @@ RESPONSE-BUFFER is a buffer containing the response from Google's
 server.  BOUNDARY-MARKER is a string that Google's server returned as
 the boundary marker for nested responses."
   (with-current-buffer response-buffer
-    (let ((response-index 0))
-      (while (re-search-forward (concat "^--" boundary-marker "") nil t)
-        (save-excursion
-          (set-mark-command nil) ;; set the mark at the beginning of
-                                 ;; the headers of nested response,
-                                 ;; right after the boundary marker
-          (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
-                    (one-nested-response-text (buffer-substring (mark) (point)))
-                    (response-id (elg-extract-content-id one-nested-response-text))
-                    (nested-response-http-code (elg-extract-http-code one-nested-response-text)))
-              ;; We should have some error handling here, but, even in
-              ;; the case when the HTTP code is not 200 (such as 401),
-              ;; a JSON string is returned in the response body, so we
-              ;; can proceed with parsing it.
-              (let* ((json-begin (string-match "^{\n" one-nested-response-text))
-                     ;; Below, we use (1+) because string-match returns
-                     ;; the position of the beginning of the match and
-                     ;; we need the closing brace as part of the JSON
-                     ;; when parsing it.
-                     (json-end (1+ (string-match "^}\n" one-nested-response-text))) 
-                     (response-parsed (json-parse-string (substring one-nested-response-text json-begin json-end))))
-                (funcall f nested-response-http-code response-id response-parsed response-index))))
-        (cl-incf response-index)))))
+    (while (re-search-forward (concat "^--" boundary-marker "") nil t)
+      (save-excursion
+        (set-mark-command nil) ;; set the mark at the beginning of
+        ;; the headers of nested response,
+        ;; right after the boundary marker
+        (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
+                  (one-nested-response-text (buffer-substring (mark) (point)))
+                  (response-id (elg-extract-content-id one-nested-response-text))
+                  (nested-response-http-code (elg-extract-http-code one-nested-response-text)))
+            ;; We should have some error handling here, but, even in
+            ;; the case when the HTTP code is not 200 (such as 401),
+            ;; a JSON string is returned in the response body, so we
+            ;; can proceed with parsing it.
+            (let* ((json-begin (string-match "^{\n" one-nested-response-text))
+                   ;; Below, we use (1+) because string-match returns
+                   ;; the position of the beginning of the match and
+                   ;; we need the closing brace as part of the JSON
+                   ;; when parsing it.
+                   (json-end (1+ (string-match "^}\n" one-nested-response-text))) 
+                   (response-parsed (json-parse-string (substring one-nested-response-text json-begin json-end))))
+              (funcall f nested-response-http-code response-id response-parsed)))))))
 
 (defun elgbatch-make-response-ht (response-id response-code response-parsed)
   (let ((response-ht (make-hash-table :test 'equal)))
@@ -115,8 +113,8 @@ the retry mechanism requests."
     ;; 1) verify 200 ok on outer batch response and extract boundary marker.
     (if-let* ((validation-result (validate-batch-response-and-get-boundary-marker response-buffer))
               (boundary-marker (cdr validation-result)))
-        (elg-map-nested-responses (lambda (response-code response-id parsed-response r-idx)
-                                    (message "%s got code %s %s %d" response-id response-code parsed-response r-idx)
+        (elg-map-nested-responses (lambda (response-code response-id parsed-response)
+                                    (message "%s got code %s %s" response-id response-code parsed-response)
                                     (push (elgbatch-make-response-ht response-id response-code parsed-response) response-hts))
                                   response-buffer
                                   boundary-marker))
