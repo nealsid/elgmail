@@ -70,73 +70,75 @@ RESPONSE-BUFFER is a buffer containing the response from Google's
 server.  BOUNDARY-MARKER is a string that Google's server returned as
 the boundary marker for nested responses."
   (with-current-buffer response-buffer
-    (while (re-search-forward (concat "^--" boundary-marker "") nil t)
-      (save-excursion
-        (set-mark-command nil) ;; set the mark at the beginning of the
-                               ;; headers of nested response, right
-                               ;; after the boundary marker
-        (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
-                  (one-nested-response-text (buffer-substring (mark) (point)))
-                  (response-id (elg-extract-content-id one-nested-response-text))
-                  (nested-response-http-code (elg-extract-http-code one-nested-response-text)))
-            (let* ((json-begin (string-match "^{\n" one-nested-response-text))
-                   ;; Below, we use (1+) because string-match returns
-                   ;; the position of the beginning of the match and
-                   ;; we need the closing brace as part of the JSON
-                   ;; when parsing it.
-                   (json-end (1+ (string-match "^}\n" one-nested-response-text))) 
-                   (response-parsed (json-parse-string (substring one-nested-response-text json-begin json-end))))
-              (funcall f nested-response-http-code response-id response-parsed)))))))
+    (let ((response-index 0))
+      (while (re-search-forward (concat "^--" boundary-marker "") nil t)
+        (save-excursion
+          (set-mark-command nil) ;; set the mark at the beginning of the
+          ;; headers of nested response, right
+          ;; after the boundary marker
+          (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
+                    (one-nested-response-text (buffer-substring (mark) (point)))
+                    (response-id (elg-extract-content-id one-nested-response-text))
+                    (nested-response-http-code (elg-extract-http-code one-nested-response-text)))
+              (let* ((json-begin (string-match "^{\n" one-nested-response-text))
+                     ;; Below, we use (1+) because string-match returns
+                     ;; the position of the beginning of the match and
+                     ;; we need the closing brace as part of the JSON
+                     ;; when parsing it.
+                     (json-end (1+ (string-match "^}\n" one-nested-response-text))) 
+                     (response-parsed (json-parse-string (substring one-nested-response-text json-begin json-end))))
+                (funcall f nested-response-http-code response-id response-parsed response-index))))
+        (cl-incf response-index)))))
 
-(defun elgbatch-send-batch-request-v2 (request-hts)
-  "Issue request to Google's batch request server.  Requests is a list of hash tables.  Each hash table has keys \"id\" which is a unique ID for the request (unique within the list) and \"request\" which is the HTTP request, without headers, corresponding to the API call, such as a string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of the retry mechanism requests."
+(defun elgbatch-send-batch-request (request-hts)
+  "Issue request to Google's batch request server.  REQUEST-HTS is a list of hash tables.  Each hash table has keys \"id\" which is a unique ID for the request (unique within the list) and \"request\" which is the HTTP request, without headers, corresponding to the API call, such as a string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of the retry mechanism requests."
   (let ((response-buffer (elgbatch-issue-batch-request request-hts)))
     (message "%s" response-buffer)
     ;; Steps are
     ;; 1) verify 200 ok on outer batch reseponse and extract boundary marker.
     (if-let* ((validation-result (validate-batch-response-and-get-boundary-marker response-buffer))
               (boundary-marker (cdr validation-result)))
-        (elg-map-nested-responses (lambda (response-code response-id parsed-response)
-                                    (message "%s got code %s %s" response-id response-code parsed-response))
+        (elg-map-nested-responses (lambda (response-code response-id parsed-response r-idx)
+                                    (message "%s got code %s %s %d" response-id response-code parsed-response r-idx))
                                   response-buffer
                                   boundary-marker)
       nil)))
       ;; 3) Iterate over nested responses and set hash table entry for response code as well as response if the code was 200
       ;; 4) For responses that were 429, retry with another batch request.
   
-(defun elgbatch-send-batch-request (requests)
-  "Issue request to Google's batch request server.  Google's batch request server accepts multiple nested requests inside a container request, in order to minimize connections to the server.  To use, pass in a list of requests, each of the form of a string in the format: \"<VERB> <PATH>\"."
-    (let* ((individual-request-bodies (elgbatch-create-nested-requests requests))
-           (url-debug t)
-           (url-request-method "POST")
-           (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
-                                        ("Content-Type" . ,(format "multipart/mixed; boundary=%s" elgbatch-boundary-string))))
-           (url-request-data (concat "--" elgbatch-boundary-string "\n" ;; First boundary marker
-                                     (string-join individual-request-bodies (concat "--" elgbatch-boundary-string "\n")) ;; Nested requests
-                                     (concat "--" elgbatch-boundary-string "--\n")))) ;; Terminating boundary marker
-      (let ((result-buffer (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
-        (message "buffer: %s" result-buffer)
-        (with-current-buffer result-buffer
-          (goto-char (point-min))
-          (re-search-forward "^HTTP/1.1 \\([0-9]+\\)" nil t)
-          (when (equal (match-string 1) "200")
-            ;; the regexp to match the boundary is too permissive, but
-            ;; expressing only the allowed characters is too complex
-            ;; (something like printable ascii characters, no spaces)
-            (when (re-search-forward "^content-type: multipart/mixed; boundary=\\(.+\\)" nil t)
-              (let ((boundary-marker (concat "--" (match-string 1)))
-                    (results-ht (make-hash-table :test 'equal)))
-                (puthash "200" (list) results-ht)
-                ;; Now that we've found the boundary string, iterate
-                ;; while it is found and parse the response
-                ;; immediately after it.
-                (while (re-search-forward (concat "^" boundary-marker "") nil t)
-                  (re-search-forward "HTTP/1.1 \\([0-9]+\\)")
-                  (if (not (equal (match-string 1) "200"))
-                      (cl-incf (gethash (match-string 1) results-ht 0))
-                    (re-search-forward "^{")
-                    (backward-char)
-                    (let ((json-begin (point)))
-                      (re-search-forward "^}")
-                      (push (json-parse-string (buffer-substring json-begin (point))) (gethash "200" results-ht)))))
-                results-ht)))))))
+;; (defun elgbatch-send-batch-request (requests)
+;;   "Issue request to Google's batch request server.  Google's batch request server accepts multiple nested requests inside a container request, in order to minimize connections to the server.  To use, pass in a list of requests, each of the form of a string in the format: \"<VERB> <PATH>\"."
+;;     (let* ((individual-request-bodies (elgbatch-create-nested-requests requests))
+;;            (url-debug t)
+;;            (url-request-method "POST")
+;;            (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
+;;                                         ("Content-Type" . ,(format "multipart/mixed; boundary=%s" elgbatch-boundary-string))))
+;;            (url-request-data (concat "--" elgbatch-boundary-string "\n" ;; First boundary marker
+;;                                      (string-join individual-request-bodies (concat "--" elgbatch-boundary-string "\n")) ;; Nested requests
+;;                                      (concat "--" elgbatch-boundary-string "--\n")))) ;; Terminating boundary marker
+;;       (let ((result-buffer (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
+;;         (message "buffer: %s" result-buffer)
+;;         (with-current-buffer result-buffer
+;;           (goto-char (point-min))
+;;           (re-search-forward "^HTTP/1.1 \\([0-9]+\\)" nil t)
+;;           (when (equal (match-string 1) "200")
+;;             ;; the regexp to match the boundary is too permissive, but
+;;             ;; expressing only the allowed characters is too complex
+;;             ;; (something like printable ascii characters, no spaces)
+;;             (when (re-search-forward "^content-type: multipart/mixed; boundary=\\(.+\\)" nil t)
+;;               (let ((boundary-marker (concat "--" (match-string 1)))
+;;                     (results-ht (make-hash-table :test 'equal)))
+;;                 (puthash "200" (list) results-ht)
+;;                 ;; Now that we've found the boundary string, iterate
+;;                 ;; while it is found and parse the response
+;;                 ;; immediately after it.
+;;                 (while (re-search-forward (concat "^" boundary-marker "") nil t)
+;;                   (re-search-forward "HTTP/1.1 \\([0-9]+\\)")
+;;                   (if (not (equal (match-string 1) "200"))
+;;                       (cl-incf (gethash (match-string 1) results-ht 0))
+;;                     (re-search-forward "^{")
+;;                     (backward-char)
+;;                     (let ((json-begin (point)))
+;;                       (re-search-forward "^}")
+;;                       (push (json-parse-string (buffer-substring json-begin (point))) (gethash "200" results-ht)))))
+;;                 results-ht)))))))
