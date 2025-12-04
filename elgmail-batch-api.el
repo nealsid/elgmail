@@ -94,8 +94,8 @@ the boundary marker for nested responses."
 
 (defun elgbatch-make-response-ht (response-id response-code response-parsed)
   (let ((response-ht (make-hash-table :test 'equal)))
-    (puthash "response-id" response-id response-ht)
-    (puthash "response-code" response-code response-ht)
+    (puthash "id" response-id response-ht)
+    (puthash "code" response-code response-ht)
     (puthash "response" response-parsed response-ht)
     response-ht))
 
@@ -107,19 +107,30 @@ HTTP request, without headers, corresponding to the API call, such as a
 string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of
 the retry mechanism requests."
   (let ((response-buffer (elgbatch-issue-batch-request request-hts))
-        (response-hts (list)))
+        (reverse-response-hts (list)))
     (message "%s" response-buffer)
     ;; Steps are
     ;; 1) verify 200 ok on outer batch response and extract boundary marker.
     (if-let* ((validation-result (validate-batch-response-and-get-boundary-marker response-buffer))
               (boundary-marker (cdr validation-result)))
+        ;; 2) Map over nested responses and create a hash table
+        ;; containing the response code, response ID, and parsed
+        ;; response.  Add the hash table to the list of response hash
+        ;; tables.
         (elg-map-nested-responses (lambda (response-code response-id parsed-response)
-                                    (message "%s got code %s %s" response-id response-code parsed-response)
-                                    (push (elgbatch-make-response-ht response-id response-code parsed-response) response-hts))
+                                    (message "%s got code %s" response-id response-code)
+                                    (push (elgbatch-make-response-ht response-id response-code parsed-response) reverse-response-hts))
                                   response-buffer
                                   boundary-marker))
-      (nreverse response-hts)))
-      ;; 3) Iterate over nested responses and set hash table entry for response code as well as response if the code was 200
+    (cl-assert (equal (length reverse-response-hts) (length request-hts)))
+    (let ((response-hts (nreverse reverse-response-hts)))
+      (cl-mapcar (lambda (request-ht response-ht)
+                   (let ((request-id (gethash "id" request-ht))
+                         (response-id (gethash "id" response-ht)))
+                     (cl-assert (equal request-id response-id) t)
+                     (puthash "code" (gethash "code" response-ht) request-ht)
+                     (puthash "response" (gethash "response" response-ht) request-ht)))
+                 request-hts response-hts))))
       ;; 4) For responses that were 429, retry with another batch request.
   
 ;; (defun elgbatch-send-batch-request (requests)
@@ -158,3 +169,14 @@ the retry mechanism requests."
 ;;                       (re-search-forward "^}")
 ;;                       (push (json-parse-string (buffer-substring json-begin (point))) (gethash "200" results-ht)))))
 ;;                 results-ht)))))))
+(defun elgbatch-fetch-threads-batch (thread-ids)
+  "Fetch Gmail thread objects by thread ID, using a batch request. THREAD-IDS is a list of thread IDs."
+  ;; First, construct a list of hash tables
+  (let ((request-hts (seq-map (lambda (thread-id)
+                                (let ((request-ht (make-hash-table :test 'equal)))
+                                  (puthash "id" thread-id request-ht)
+                                  (puthash "request" (format "GET /gmail/v1/users/me/threads/%s" thread-id) request-ht)
+                                  request-ht))
+                              thread-ids)))
+    (elgbatch-send-batch-request request-hts)
+    request-hts))
