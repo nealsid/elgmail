@@ -128,25 +128,41 @@
         (insert (concat body-string "\n\n"))
         (insert "-=-=-=-=-=-=-=-=-=-=-=\n\n")))))
 
+(defun elg-get-thread-ids-from-threads (threads)
+  (let ((reversed-thread-ids nil))
+    (seq-doseq (one-thread threads)
+      (push (gethash "id" one-thread) reversed-thread-ids))
+    (nreverse reversed-thread-ids)))
+  
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))
          (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
          (server-label-name (cdr label-alist-entry))
          (threads (elg-get-threads-for-labels (list server-label-name)))
          (thread-list-buffer (get-buffer-create "*elgmail threads*")))
+
     (elg--configure-window-layout 25)
     (pop-to-buffer thread-list-buffer)
     (hl-line-mode 1)
     (erase-buffer)
-    (seq-doseq (one-thread threads)
-      (let* ((complete-thread (elg-get-thread-by-id (gethash "id" one-thread)))
-             (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" complete-thread) 0)))))
-        (insert "\t")
-        (insert-button (format "(%d) %s" (length (gethash "messages" complete-thread)) (elg--get-subject-from-headers first-message-headers))
-                       'action 'elg-get-and-display-single-thread
-                       'thread-id (gethash "id" one-thread)
-                       'thread-fetch-buffer (gethash "buffer-id" complete-thread))
-        (insert "\n")))))
+
+    ;; Now get the thread ids from the thread list obtained above and
+    ;; issue a batch request to fetch all those threads.
+    (let* ((thread-ids (elg-get-thread-ids-from-threads threads))
+           (response-hts (elgbatch-fetch-threads-batch thread-ids)))
+      ;; response-hts is the list of response hash tables from the
+      ;; batch request, with each entry being a single thread.
+      ;; Iterate over that and generate a button for each thread.
+      (seq-doseq (response-ht response-hts)
+        ;; response is a single thread object.
+        (let* ((response (gethash "response" response-ht)) 
+               (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" response) 0)))))
+          (insert "\t")
+          (insert-button (format "(%d) %s" (length (gethash "messages" response)) (elg--get-subject-from-headers first-message-headers))
+                         'action 'elg-get-and-display-single-thread
+                         'thread-id (gethash "id" response))
+;;                         'thread-fetch-buffer (gethash "buffer-id" complete-thread))
+          (insert "\n"))))))
 
 (defun elg--get-subject-from-headers (message-headers)
   (catch 'found-subject
