@@ -92,7 +92,7 @@
           (t (cl-assert (or (equal payload-mime-type "text/plain")
                             (equal payload-mime-type "text/html")))
              (cons payload-mime-type (gethash "data" (gethash "body" msg-payload)))))))
-  
+
 (defun elg--find-body-from-payload (msg-payload)
   "Find the body from a message payload.  The mime type of the payload is examined.  If it's text/html, we return that body.  If it's multipart/alternative, we find the text/plain part and return that."
   (let ((payload-mime-type (gethash "mimeType" msg-payload)))
@@ -133,7 +133,7 @@
     (seq-doseq (one-thread threads)
       (push (gethash "id" one-thread) reversed-thread-ids))
     (nreverse reversed-thread-ids)))
-  
+
 (defun elg-get-and-display-threads-for-label (button)
   (let* ((label-name (button-label button))
          (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
@@ -155,14 +155,17 @@
       ;; Iterate over that and generate a button for each thread.
       (seq-doseq (response-ht response-hts)
         ;; response is a single thread object.
-        (let* ((response (gethash "response" response-ht)) 
-               (first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" response) 0)))))
-          (insert "\t")
-          (insert-button (format "(%d) %s" (length (gethash "messages" response)) (elg--get-subject-from-headers first-message-headers))
-                         'action 'elg-get-and-display-single-thread
-                         'thread-id (gethash "id" response))
-;;                         'thread-fetch-buffer (gethash "buffer-id" complete-thread))
-          (insert "\n"))))))
+        (let* ((response (gethash "response" response-ht))
+               (response-code (gethash "code" response-ht)))
+          (if (equal response-code "200")
+              (let ((first-message-headers (gethash "headers" (gethash "payload" (aref (gethash "messages" response) 0)))))
+                (insert "\t")
+                (insert-button (format "(%d) %s" (length (gethash "messages" response)) (elg--get-subject-from-headers first-message-headers))
+                               'action 'elg-get-and-display-single-thread
+                               'thread-id (gethash "id" response))
+                ;;                         'thread-fetch-buffer (gethash "buffer-id" complete-thread))
+                (insert "\n"))
+            (insert "\t429\n")))))))
 
 (defun elg--get-subject-from-headers (message-headers)
   (catch 'found-subject
