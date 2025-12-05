@@ -125,15 +125,26 @@ the retry mechanism requests."
     ;; For each hash table in the list of hash tables passed as a
     ;; parameter to this function, add a key/valuen for the response
     ;; code and parsed response.
-    (let ((response-hts (nreverse reverse-response-hts)))
+    (let ((response-hts (nreverse reverse-response-hts))
+          (response-code-alist '()))
       (cl-mapcar (lambda (request-ht response-ht)
                    ;; Verify the IDs of the request & response
                    ;; hashtable match.
-                   (cl-assert (equal (gethash "id" request-ht) (gethash "id" response-ht) t))
-                   (puthash "code" (gethash "code" response-ht) request-ht)
-                   (puthash "response" (gethash "response" response-ht) request-ht))
-                 request-hts response-hts))))
+                   (let ((response-code (gethash "code" response-ht)))
+                     (cl-assert (equal (gethash "id" request-ht) (gethash "id" response-ht)) t)
+                     (puthash "code" response-code request-ht)
+                     (puthash "response" (gethash "response" response-ht) request-ht)
+                     (setq response-code-alist (increment-or-add-alist-value response-code response-code-alist))))
+                 request-hts response-hts)
+      response-code-alist)))
       ;; 4) For responses that were 429, retry with another batch request.
+
+(defun increment-or-add-alist-value (key alist)
+  (if-let ((alist-cons-cell (assoc key alist)))
+      (progn
+        (cl-incf (cdr alist-cons-cell))
+        alist)
+    (push (cons key 1) alist)))
 
 ;; (defun elgbatch-send-batch-request (requests)
 ;;   "Issue request to Google's batch request server.  Google's batch request server accepts multiple nested requests inside a container request, in order to minimize connections to the server.  To use, pass in a list of requests, each of the form of a string in the format: \"<VERB> <PATH>\"."
@@ -180,5 +191,5 @@ the retry mechanism requests."
                                   (puthash "request" (format "GET /gmail/v1/users/me/threads/%s" thread-id) request-ht)
                                   request-ht))
                               thread-ids)))
-    (elgbatch-send-batch-request request-hts)
+    (message "%s" (elgbatch-send-batch-request request-hts))
     request-hts))
