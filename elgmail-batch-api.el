@@ -28,7 +28,7 @@ Content-ID: %%s
   (seq-map (lambda (ht)
              (format elgbatch-nested-request-format-string (gethash "id" ht) (gethash "request" ht)))
            request-hts))
-  
+
 (defun elgbatch-auth-and-content-type-headers ()
   `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
     ("Content-Type" . ,(format "multipart/mixed; boundary=%s" elgbatch-boundary-string))))
@@ -41,11 +41,6 @@ Content-ID: %%s
         (when (re-search-forward "^content-type: multipart/mixed; boundary=\\(.+\\)" nil t)
           (cons "200" (match-string 1)))
       (cons (match-string 1) nil))))
-
-(defun extract-batch-response-boundary-marker (response-buffer)
-  (with-current-buffer response-buffer
-    (when (re-search-forward "^content-type: multipart/mixed; boundary=\\(.+\\)" nil t)
-      (match-string 1))))
 
 (defun elgbatch-issue-batch-request (request-hts)
   (let ((url-request-data (concat (string-join (elgbatch-create-nested-requests request-hts)) (format "--%s--" elgbatch-boundary-string)))
@@ -61,7 +56,7 @@ Content-ID: %%s
 (defun elg-extract-http-code (one-response-text)
   (and (string-match "HTTP/1.1 \\([0-9]+\\)" one-response-text)
        (match-string 1 one-response-text)))
-      
+
 (defun elg-map-nested-responses (f response-buffer boundary-marker)
   "Given a buffer containing a response from Google's batch server, iterate
 over the nested responses and call a function for each one.  F is a
@@ -72,9 +67,9 @@ the boundary marker for nested responses."
   (with-current-buffer response-buffer
     (while (re-search-forward (concat "^--" boundary-marker "") nil t)
       (save-excursion
-        (set-mark-command nil) ;; set the mark at the beginning of
-        ;; the headers of nested response,
-        ;; right after the boundary marker
+        (set-mark-command nil) ;; set the mark at the beginning of the
+                               ;; headers of nested response, right
+                               ;; after the boundary marker
         (if-let* ((end-of-current-response (re-search-forward (concat "^--" boundary-marker) nil t))
                   (one-nested-response-text (buffer-substring (mark) (point)))
                   (response-id (elg-extract-content-id one-nested-response-text))
@@ -88,7 +83,7 @@ the boundary marker for nested responses."
                    ;; the position of the beginning of the match and
                    ;; we need the closing brace as part of the JSON
                    ;; when parsing it.
-                   (json-end (1+ (string-match "^}\n" one-nested-response-text))) 
+                   (json-end (1+ (string-match "^}\n" one-nested-response-text)))
                    (response-parsed (json-parse-string (substring one-nested-response-text json-begin json-end))))
               (funcall f nested-response-http-code response-id response-parsed)))))))
 
@@ -107,7 +102,11 @@ HTTP request, without headers, corresponding to the API call, such as a
 string in the format: \"<HTTP VERB> <PATH>\".  The ID is used as part of
 the retry mechanism requests."
   (let ((response-buffer (elgbatch-issue-batch-request request-hts))
-        (reverse-response-hts (list)))
+        (reverse-response-hts (list))) ;; it's called
+                                       ;; reverse-response-hts because
+                                       ;; we 'push' onto this list, so
+                                       ;; the order is reversed from
+                                       ;; the order they should be in.
     (message "%s" response-buffer)
     ;; Steps are
     ;; 1) verify 200 ok on outer batch response and extract boundary marker.
@@ -123,16 +122,19 @@ the retry mechanism requests."
                                   response-buffer
                                   boundary-marker))
     (cl-assert (equal (length reverse-response-hts) (length request-hts)))
+    ;; For each hash table in the list of hash tables passed as a
+    ;; parameter to this function, add a key/valuen for the response
+    ;; code and parsed response.
     (let ((response-hts (nreverse reverse-response-hts)))
       (cl-mapcar (lambda (request-ht response-ht)
-                   (let ((request-id (gethash "id" request-ht))
-                         (response-id (gethash "id" response-ht)))
-                     (cl-assert (equal request-id response-id) t)
-                     (puthash "code" (gethash "code" response-ht) request-ht)
-                     (puthash "response" (gethash "response" response-ht) request-ht)))
+                   ;; Verify the IDs of the request & response
+                   ;; hashtable match.
+                   (cl-assert (equal (gethash "id" request-ht) (gethash "id" response-ht) t))
+                   (puthash "code" (gethash "code" response-ht) request-ht)
+                   (puthash "response" (gethash "response" response-ht) request-ht))
                  request-hts response-hts))))
       ;; 4) For responses that were 429, retry with another batch request.
-  
+
 ;; (defun elgbatch-send-batch-request (requests)
 ;;   "Issue request to Google's batch request server.  Google's batch request server accepts multiple nested requests inside a container request, in order to minimize connections to the server.  To use, pass in a list of requests, each of the form of a string in the format: \"<VERB> <PATH>\"."
 ;;     (let* ((individual-request-bodies (elgbatch-create-nested-requests requests))
