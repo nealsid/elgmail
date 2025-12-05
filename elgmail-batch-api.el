@@ -127,21 +127,23 @@ the retry mechanism requests."
     ;; code and parsed response.
     (let ((response-hts (nreverse reverse-response-hts))
           (response-code-alist '()))
-      (cl-mapcar (lambda (request-ht response-ht)
-                   ;; Verify the IDs of the request & response
-                   ;; hashtable match.
-                   (let ((response-code (gethash "code" response-ht)))
-                     (cl-assert (equal (gethash "id" request-ht) (gethash "id" response-ht)) t)
-                     (puthash "code" response-code request-ht)
-                     (puthash "response" (gethash "response" response-ht) request-ht)
-                     (setq response-code-alist (increment-alist-value response-code response-code-alist))))
-                 request-hts response-hts)
+      (cl-mapcar 'elgbatch-copy-resp-ht-to-req-ht request-hts response-hts)
+      (cl-mapcar (lambda (response-ht)
+                   (setq response-code-alist (increment-alist-value (gethash "code" response-ht) response-code-alist)))
+                 response-hts)
       response-code-alist)))
       ;; 4) For responses that were 429, retry with another batch request.
 
+(defun elgbatch-copy-resp-ht-to-req-ht (request-ht response-ht)
+  "Copies specific key & values from REQUEST-HT to RESPONSE-HT."
+  ;; Verify the IDs of the request & response hashtable match.
+  (cl-assert (equal (gethash "id" request-ht) (gethash "id" response-ht)) t)
+  (puthash "code" (gethash "code" response-ht) request-ht)
+  (puthash "response" (gethash "response" response-ht) request-ht))
+
 (defun increment-alist-value (key alist)
   "Increments the value associated with key in alist.  If key is not presnet, add it with a value of 1."
-  (if-let ((alist-cons-cell (assoc key alist)))
+  (if-let* ((alist-cons-cell (assoc key alist)))
       (progn
         (cl-incf (cdr alist-cons-cell))
         alist)
