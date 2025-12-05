@@ -134,12 +134,13 @@ the retry mechanism requests."
                      (cl-assert (equal (gethash "id" request-ht) (gethash "id" response-ht)) t)
                      (puthash "code" response-code request-ht)
                      (puthash "response" (gethash "response" response-ht) request-ht)
-                     (setq response-code-alist (increment-or-add-alist-value response-code response-code-alist))))
+                     (setq response-code-alist (increment-alist-value response-code response-code-alist))))
                  request-hts response-hts)
       response-code-alist)))
       ;; 4) For responses that were 429, retry with another batch request.
 
-(defun increment-or-add-alist-value (key alist)
+(defun increment-alist-value (key alist)
+  "Increments the value associated with key in alist.  If key is not presnet, add it with a value of 1."
   (if-let ((alist-cons-cell (assoc key alist)))
       (progn
         (cl-incf (cdr alist-cons-cell))
