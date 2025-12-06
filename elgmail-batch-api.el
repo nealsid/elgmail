@@ -22,18 +22,29 @@ Content-Type: application/http
 Content-ID: %%s
 
 %%s\n\n" elgbatch-boundary-string)
-  "The format string used to construct each inner request. The string is passed to `format` at definition time, as well as at run-time, which is why some format specifiers have double percent signs. ")
+  "The format string used to construct each inner request. The string is
+passed to `format` at definition time, as well as at run-time, which is
+why some format specifiers have double percent signs.")
 
 (defun elgbatch-create-nested-requests (request-hts)
+  "Given a list of request hash tables, each of which contains keys \"ID\"
+and \"REQUEST\", the latter which is an HTTP VERB and path, return a
+list of HTTP request headers & bodies.  See
+`elgbatch-nested-request-format-string'."
   (seq-map (lambda (ht)
              (format elgbatch-nested-request-format-string (gethash "id" ht) (gethash "request" ht)))
            request-hts))
 
 (defun elgbatch-auth-and-content-type-headers ()
+  "Returns necessary headers for the batch HTTP request, such as boundary
+marker and authorization header."
   `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))
     ("Content-Type" . ,(format "multipart/mixed; boundary=%s" elgbatch-boundary-string))))
 
 (defun validate-batch-response-and-get-boundary-marker (response-buffer)
+  "Validates the batch response by checking for a HTTP 200 error code.
+Returns a cons cell, the car of which is the HTTP code and, if it is
+200, the cdr is boundary marker for the nested responses."
   (with-current-buffer response-buffer
     (goto-char (point-min))
     (re-search-forward "^HTTP/1.1 \\([0-9]+\\)" nil t)
@@ -43,6 +54,9 @@ Content-ID: %%s
       (cons (match-string 1) nil))))
 
 (defun elgbatch-issue-batch-request (request-hts)
+  "Given a list of request hash tables (see below for hash table keys),
+actually issue a batch request synchronously to the Google server and
+return a buffer containing the response."
   (let ((url-request-data (concat (string-join (elgbatch-create-nested-requests request-hts)) (format "--%s--" elgbatch-boundary-string)))
         (url-debug t)
         (url-request-method "POST")
@@ -50,10 +64,12 @@ Content-ID: %%s
     (url-retrieve-synchronously "https://www.googleapis.com/batch/gmail/v1")))
 
 (defun elg-extract-content-id (one-response-text)
+  "Extracts the Content ID from a nested response.  ONE-RESPONSE-TEXT is the response text."
   (and (string-match "Content-ID: response-\\(.*\\)\n" one-response-text)
        (match-string 1 one-response-text)))
 
 (defun elg-extract-http-code (one-response-text)
+  "Extracts the HTTP code from a nested response.  ONE-RESPONSE-TEXT is the response text."
   (and (string-match "HTTP/1.1 \\([0-9]+\\)" one-response-text)
        (match-string 1 one-response-text)))
 
@@ -88,6 +104,7 @@ the boundary marker for nested responses."
               (funcall f nested-response-http-code response-id response-parsed)))))))
 
 (defun elgbatch-make-response-ht (response-id response-code response-parsed)
+  "Creates a response hash table. RESPONSE-ID is the Content ID of the response. RESPONSE-CODE is the HTTP code of the response.  RESPONSE-PARSED is the parsed JSON of the response."
   (let ((response-ht (make-hash-table :test 'equal)))
     (puthash "id" response-id response-ht)
     (puthash "code" response-code response-ht)
