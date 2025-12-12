@@ -111,6 +111,22 @@ the boundary marker for nested responses."
     (puthash "response" response-parsed response-ht)
     response-ht))
 
+(defun elgbatch-send-batch-request-with-retry (request-hts)
+  (let* ((resp-alist-counts (elgbatch-send-batch-request request-hts))
+         ;; Partition the list by response code.
+         (resp-alist (seq-group-by (lambda (ht)
+                                     (gethash "code" ht))
+                                   request-hts)))
+    (message "length: %d" (length (cdr (assoc "429" resp-alist))))
+    (let* ((hts-to-retry (cdr (assoc "429" resp-alist)))
+           (resp-retry-alist-counts (elgbatch-send-batch-request hts-to-retry))
+           (resp-retry-alist (seq-group-by (lambda (ht)
+                                             (gethash "code" ht))
+                                           hts-to-retry)))
+      (message "%s" resp-retry-alist)
+      ;; lots of failuer cases we're ignoring here
+      (elg-concat-alist-values-for-key resp-alist resp-retry-alist 200))))
+
 (defun elgbatch-send-batch-request (request-hts)
   "Issue request to Google's batch request server.  REQUEST-HTS is a list
 of hash tables.  Each hash table has keys \"id\" which is a unique ID
@@ -134,7 +150,6 @@ the retry mechanism requests."
         ;; response.  Add the hash table to the list of response hash
         ;; tables.
         (elg-map-nested-responses (lambda (response-code response-id parsed-response)
-                                    (message "%s got code %s" response-id response-code)
                                     (push (elgbatch-make-response-ht response-id response-code parsed-response) reverse-response-hts))
                                   response-buffer
                                   boundary-marker))
@@ -175,5 +190,9 @@ the retry mechanism requests."
                                   (puthash "request" (format "GET /gmail/v1/users/me/threads/%s" thread-id) request-ht)
                                   request-ht))
                               thread-ids)))
-    (message "%s" (elgbatch-send-batch-request request-hts))
+    (message "hello: %s" (elgbatch-send-batch-request-with-retry request-hts))
     request-hts))
+
+(defun elg-concat-alist-values-for-key (alist1 alist2 key)
+  "Concatenates values for two alists with a specific key, and return the resulting list"
+  (flatten-tree (list (cdr (assoc key alist1)) (cdr (assoc key alist2)))))
