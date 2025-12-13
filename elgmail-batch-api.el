@@ -111,7 +111,7 @@ the boundary marker for nested responses."
     (puthash "response" response-parsed response-ht)
     response-ht))
 
-(defun elgbatch-partition-response-hts-by-code (hts)
+(defun elgbatch-partition-hts-by-code (hts)
   "Given a list of hash tables, each with a \"code\" key corresponding to
 the HTTP return code of its corresponding request, partition it into an
 alist.  The key of the alist is the HTTP code and the value is a list of
@@ -124,14 +124,14 @@ hash tables corresponding to requests that returned that code."
   ;; Send the first batch request.
   (let* ((resp-alist-counts (elgbatch-send-batch-request request-hts))
          ;; Partition the list by response code.
-         (resp-alist (elgbatch-partition-response-hts-by-code request-hts)))
+         (resp-alist (elgbatch-partition-hts-by-code request-hts)))
     (message "%s" resp-alist-counts)
     ;; Get the list of response hts corresponding to 429 return code,
     ;; which we'll retry.
     (let* ((hts-to-retry (cdr (assoc "429" resp-alist)))
            ;; Retry them.
            (resp-retry-alist-counts (elgbatch-send-batch-request hts-to-retry))
-           (resp-retry-alist (elgbatch-partition-response-hts-by-code hts-to-retry)))
+           (resp-retry-alist (elgbatch-partition-hts-by-code hts-to-retry)))
       (message "%s" resp-retry-alist-counts)
       ;; lots of failuer cases we're ignoring here
       (elg-concat-alist-values-for-key resp-alist resp-retry-alist 200))))
