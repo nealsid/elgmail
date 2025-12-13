@@ -1,0 +1,53 @@
+;;; elgmail-gmail-api.el -- Functions that are wrappers for Google's
+;;; Gmail API
+
+;; Copyright (C) 2025- Neal Sidhwaney
+
+;; Author: Neal Sidhwaney <nealsid@gmail.com>
+;; Version: 0.1
+;; URL: https://github.com/nealsid/elgmail
+;; Keywords: email
+;; Package-Requires: ((emacs "30.2") (oauth2 "0.18.3"))
+
+;;; Commentary:
+
+;; Wrapper library for Google's Gmail API.
+;;
+;;
+;;; Code:
+(defconst elg-thread-list-endpoint "https://gmail.googleapis.com/gmail/v1/users/me/threads" "Google endpoint for thread list method")
+
+(defun elg-alist-to-query-string (param-alist)
+  "Converts an alist of parameters to an HTTP query string.  The key of
+each alist entry is the parameter name and the alist entry value is the
+parameter value.  No URL encoding is performed."
+  (let ((param-values (mapcar (lambda (one-param-cons)
+                                (format "%s=%s" (car one-param-cons) (cdr one-param-cons)))
+                              param-alist)))
+    (string-join param-values "&")))
+
+(defun elg-call-google-endpoint-async (endpoint param-alist json-key callback)
+  "Asynchronously invokes an Google Gmail API endpoint.  ENDPOINT is the
+URL to fetch.  PARAM-ALIST is an alist of query parameters.  JSON-KEY is
+the key used to extract the JSON response (see
+`elg-call-google-endpoint-async-callback').  CALLBACK is the callback to
+invoke when the invocation is complete."
+  (let ((url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))))
+        (elg-url-with-params (format "%s?%s" endpoint (elg-alist-to-query-string param-alist))))
+    (url-retrieve elg-url-with-params 'elg-call-google-endpoint-async-callback (list json-key callback) t)))
+
+(defun elg-call-google-endpoint-async-callback (status json-key user-callback)
+  ;; The current buffer contains the response.
+  (message "%s" (current-buffer))
+  ;; Now we parse the response part of the buffer as JSON.
+  (goto-char (point-min))
+  (re-search-forward "^{")
+  (backward-char)
+  (let ((json-parsed (json-parse-buffer)))
+    (apply user-callback (list (gethash json-key json-parsed)))))
+
+(defun elg-call-thread-list-endpoint (param-alist)
+  (elg-call-google-endpoint-async elg-thread-list-endpoint param-alist "threads" 'elg-call-thread-list-endpoint-callback))
+
+(defun elg-call-thread-list-endpoint-callback (json-parsed)
+  (message "hello! %s" json-parsed))

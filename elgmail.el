@@ -192,6 +192,23 @@
               (puthash "buffer-id" (buffer-name thread-fetch-response-buffer) json-parse-result)
               json-parse-result)))))))
 
+(defun elg-get-threads-for-search-query (query &optional max-results)
+  "Issue a request to retrieve search results for Gmail search query QUERY.
+MAX-RESULTS, if specified, limits the number of results returned.
+Returns a list of THREAD objects, which are parsed from JSON returned by
+Google."
+  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
+         (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" gmail-api-access-token))));;,(concat "Bearer " gmail-api-access-token))))
+         (num-results (if max-results max-results 100))
+         (thread-search-url (format "https://gmail.googleapis.com/gmail/v1/users/me/threads?q=%s&maxResults=%d" query num-results)))
+    (let* ((convo-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-convo-url))))
+      (message "%s" convo-fetch-response-buffer)
+      (with-current-buffer convo-fetch-response-buffer
+        (goto-char (point-min))
+        (re-search-forward "^{")
+        (backward-char)
+        (gethash "threads" (json-parse-buffer))))))))
+
 (defun elg-get-threads-for-labels (labels &optional max-results)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
          (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" gmail-api-access-token))));;,(concat "Bearer " gmail-api-access-token))))
