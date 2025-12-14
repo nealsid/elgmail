@@ -16,6 +16,7 @@
 ;;
 ;;; Code:
 (defconst elg-thread-list-endpoint "https://gmail.googleapis.com/gmail/v1/users/me/threads" "Google endpoint for thread list method")
+(defconst elg-label-list-endpoint "https://gmail.googleapis.com/gmail/v1/users/me/labels" "Google endpoint for label list method")
 
 (defun elg-alist-to-query-string (param-alist)
   "Converts an alist of parameters to an HTTP query string.  The key of
@@ -51,3 +52,10 @@ invoke when the invocation is complete."
 
 (defun elg-call-thread-list-endpoint-callback (json-parsed)
   (message "hello! %s" json-parsed))
+
+(defun elg-call-label-list-endpoint (param-alist user-callback callback-args)
+    (elg-call-google-endpoint-async elg-label-list-endpoint param-alist "labels" 'elg-call-label-list-endpoint-callback user-callback callback-args))
+
+(defun elg-call-label-list-endpoint-callback (json-parsed user-callback user-callback-args)
+  (message "hello! %s" json-parsed)
+  (apply user-callback json-parsed user-callback-args))
