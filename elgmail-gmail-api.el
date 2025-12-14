@@ -27,7 +27,7 @@ parameter value.  No URL encoding is performed."
                               param-alist)))
     (string-join param-values "&")))
 
-(defun elg-call-google-endpoint-async (endpoint param-alist json-key callback)
+(defun elg-call-google-endpoint-async (endpoint param-alist json-key callback callback-args)
   "Asynchronously invokes an Google Gmail API endpoint.  ENDPOINT is the
 URL to fetch.  PARAM-ALIST is an alist of query parameters.  JSON-KEY is
 the key used to extract the JSON response (see
@@ -35,9 +35,9 @@ the key used to extract the JSON response (see
 invoke when the invocation is complete."
   (let ((url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" (oauth2-token-access-token elg--oauth-token)))))
         (elg-url-with-params (format "%s?%s" endpoint (elg-alist-to-query-string param-alist))))
-    (url-retrieve elg-url-with-params 'elg-call-google-endpoint-async-callback (list json-key callback) t)))
+    (url-retrieve elg-url-with-params 'elg-call-google-endpoint-async-callback (list json-key callback callback-args) t)))
 
-(defun elg-call-google-endpoint-async-callback (status json-key user-callback)
+(defun elg-call-google-endpoint-async-callback (status json-key callback callback-args)
   ;; The current buffer contains the response.
   (message "%s" (current-buffer))
   ;; Now we parse the response part of the buffer as JSON.
@@ -45,7 +45,7 @@ invoke when the invocation is complete."
   (re-search-forward "^{")
   (backward-char)
   (let ((json-parsed (json-parse-buffer)))
-    (apply user-callback (list (gethash json-key json-parsed)))))
+    (apply callback (gethash json-key json-parsed) callback-args)))
 
 (defun elg-call-thread-list-endpoint (param-alist)
   (elg-call-google-endpoint-async elg-thread-list-endpoint param-alist "threads" 'elg-call-thread-list-endpoint-callback))
@@ -54,7 +54,7 @@ invoke when the invocation is complete."
   (message "hello! %s" json-parsed))
 
 (defun elg-call-label-list-endpoint (param-alist user-callback callback-args)
-    (elg-call-google-endpoint-async elg-label-list-endpoint param-alist "labels" 'elg-call-label-list-endpoint-callback user-callback callback-args))
+    (elg-call-google-endpoint-async elg-label-list-endpoint param-alist "labels" 'elg-call-label-list-endpoint-callback (list user-callback callback-args)))
 
 (defun elg-call-label-list-endpoint-callback (json-parsed user-callback user-callback-args)
   (message "hello! %s" json-parsed)
