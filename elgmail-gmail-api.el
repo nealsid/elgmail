@@ -36,6 +36,13 @@ the callback to invoke when the invocation is complete."
     (url-retrieve elg-url-with-params 'elg-call-google-endpoint-async-callback (list callback callback-args) t)))
 
 (defun elg-call-google-endpoint-async-callback (status callback callback-args)
+  "Callback function that is passed to `url-retrieve' by
+`elg-call-google-endpoint-async'.  This function parses the returned
+JSON and then invokes a different, second, callback.  That second
+callback is the one that was passed to
+`elg-call-google-endpoint-async''s arguments.  The second callback is
+called with the parsed JSON and the extra args passed to
+`elg-call-google-endpoint-async'."
   ;; The current buffer contains the response.
   (message "%s" (current-buffer))
   ;; Now we parse the response part of the buffer as JSON.
@@ -46,16 +53,30 @@ the callback to invoke when the invocation is complete."
     (apply callback json-parsed callback-args)))
 
 (defun elg-call-thread-list-endpoint (param-alist)
-  (elg-call-google-endpoint-async elg-thread-list-endpoint param-alist "threads" 'elg-call-thread-list-endpoint-callback))
+  "Function to invoke Google's thread list endpoint.  PARAM-ALIST is an
+assoc-list of query parameters, which usually correspond to a Gmail
+search query."
+  (elg-call-google-endpoint-async elg-thread-list-endpoint param-alist 'elg-call-thread-list-endpoint-callback))
 
 (defun elg-call-thread-list-endpoint-callback (json-parsed)
+  "Callback invoked when `elg-call-thread-list-endpoint' has parsed the
+JSON response. Currently not implemented."
   (message "hello! %s" json-parsed))
 
 (defun elg-call-label-list-endpoint (param-alist user-callback &optional callback-args)
+  "Asynchronously invoke Google's endpoint to retrieve a list of Gmail
+labels for the user.  PARAM-ALIST is an alist of query parameters.
+USER-CALLBACK is a function to invoke when the list of labels has been
+retrieved.  CALLBACK-ARGS is a list of args to pass to the callback,
+which is invoked as (apply user-callback json-parsed callback-args)"
   (when (and callback-args (not (listp callback-args)))
     (signal 'wrong-type-argument (list callback-args 'listp)))
   (elg-call-google-endpoint-async elg-label-list-endpoint param-alist 'elg-call-label-list-endpoint-callback (list user-callback callback-args)))
 
 (defun elg-call-label-list-endpoint-callback (json-parsed user-callback user-callback-args)
+  "Callback passed to `elg-call-google-endpoint-async' by
+`elg-call-label-list-endpoint' to be invoked when the lsit of labels has
+been retrieved.  This callback invokes the callback passed by the user
+to `elg-call-label-list-endpoint'."
   (message "hello! %s" json-parsed)
   (apply user-callback json-parsed user-callback-args))
