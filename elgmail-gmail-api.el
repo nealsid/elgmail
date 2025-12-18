@@ -53,8 +53,10 @@ invoke when the invocation is complete."
 (defun elg-call-thread-list-endpoint-callback (json-parsed)
   (message "hello! %s" json-parsed))
 
-(defun elg-call-label-list-endpoint (param-alist user-callback callback-args)
-    (elg-call-google-endpoint-async elg-label-list-endpoint param-alist "labels" 'elg-call-label-list-endpoint-callback (list user-callback callback-args)))
+(defun elg-call-label-list-endpoint (param-alist user-callback &optional callback-args)
+  (when (and callback-args (not (listp callback-args)))
+    (signal 'wrong-type-argument (list callback-args 'listp)))
+  (elg-call-google-endpoint-async elg-label-list-endpoint param-alist "labels" 'elg-call-label-list-endpoint-callback (list user-callback callback-args)))
 
 (defun elg-call-label-list-endpoint-callback (json-parsed user-callback user-callback-args)
   (message "hello! %s" json-parsed)
