@@ -13,21 +13,32 @@
 ;; Tests for batch API functions in elgmail-batch-api.el
 ;;
 (require 'ert)
+(require 'elgmail)
+(require 'elgmail-batch-api)
 
 (ert-deftest elgbatch-create-5-nested-requests ()
-  (let* ((api-calls '("GET /gmail/v1/users/me/thread/01"
-                      "GET /gmail/v1/users/me/thread/02"
-                      "GET /gmail/v1/users/me/thread/03"
-                      "GET /gmail/v1/users/me/thread/04"
-                      "GET /gmail/v1/users/me/thread/05"))
-         (inner-requests (elgbatch-create-nested-requests api-calls)))
+  (let* ((thread-ids (number-sequence 1 5))
+         (api-calls (mapcar (lambda (thread-id)
+                              (format "GET /gmail/v1/users/me/thread/%s" thread-id))
+                            thread-ids))
+         (request-hts (cl-mapcar (lambda (thread-id api-call)
+                                   (let ((ht (make-hash-table :test 'equal)))
+                                     (puthash "id" thread-id ht)
+                                     (puthash "request" api-call ht)
+                                     ht))
+                                 thread-ids api-calls))
+         (inner-requests (elgbatch-create-nested-requests request-hts)))
     (seq-map-indexed (lambda (one-request idx)
                        (should (equal (format "Content-Type: application/http
+Content-ID: %d
+
 
 GET /gmail/v1/users/me/thread/%02d
 
-" (1+ idx)) one-request))) inner-requests)))
-    
+" (1+ idx) (1+ idx))
+                                      one-request)))
+                     inner-requests)))
+
 (ert-deftest elgbatch-send-5-nested-requests ()
   (let ((api-calls '("GET /gmail/v1/users/me/thread/01"
                      "GET /gmail/v1/users/me/thread/02"
@@ -75,5 +86,3 @@ GET /gmail/v1/users/me/thread/05
                       `((name . ,url-advice-name)))
           (elgbatch-send-batch-request api-calls))
       (advice-remove 'url-retrieve-synchronously url-advice-name))))
-
-  

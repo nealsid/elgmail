@@ -52,16 +52,23 @@ called with the parsed JSON and the extra args passed to
   (let ((json-parsed (json-parse-buffer)))
     (apply callback json-parsed callback-args)))
 
-(defun elg-call-thread-list-endpoint (param-alist)
+(defun elg-call-thread-list-endpoint (param-alist &optional user-callback callback-args)
   "Function to invoke Google's thread list endpoint.  PARAM-ALIST is an
 assoc-list of query parameters, which usually correspond to a Gmail
 search query."
-  (elg-call-google-endpoint-async elg-thread-list-endpoint param-alist 'elg-call-thread-list-endpoint-callback))
+  (when (and callback (not (functionp user-callback)))
+    (signal 'wrong-type-argument (list user-callback 'functionp)))
+  (when (and callback-args (not (listp callback-args)))
+    (signal 'wrong-type-argument (list callback-args 'listp)))
+  (elg-call-google-endpoint-async elg-thread-list-endpoint param-alist 'elg-call-thread-list-endpoint-callback (list user-callback callback-args)))
 
-(defun elg-call-thread-list-endpoint-callback (json-parsed)
+(defun elg-call-thread-list-endpoint-callback (json-parsed user-callback callback-args)
   "Callback invoked when `elg-call-thread-list-endpoint' has parsed the
-JSON response. Currently not implemented."
-  (message "hello! %s" json-parsed))
+JSON response. JSON-PARSED is the parsed JSON returned by
+Google. USER-CALLBACK & CALLBACK-ARGS are the callback we should invoke,
+which is called by (apply user-callback json-parsed callback-args)"
+  (message "hello! %s" json-parsed)
+  (apply user-callback json-parsed user-callback-args))
 
 (defun elg-call-label-list-endpoint (param-alist user-callback &optional callback-args)
   "Asynchronously invoke Google's endpoint to retrieve a list of Gmail

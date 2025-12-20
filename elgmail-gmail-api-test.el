@@ -15,6 +15,8 @@
 ;;
 ;;; Code:
 (require 'ert)
+(require 'elgmail)
+(require 'elgmail-gmail-api)
 
 (ert-deftest elg-alist-to-query-string-unittests ()
   "Tests for elg-alist-to-query-string."
