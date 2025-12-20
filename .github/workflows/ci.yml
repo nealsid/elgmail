@@ -29,11 +29,11 @@ jobs:
         # You may need a specific action or command to ensure Emacs is installed
         # on the runner if it's not present by default. On Ubuntu, it's usually:
         run: sudo apt-get update && sudo apt-get install emacs -y
-      
+
 
       - name: Run ERT Tests
         # Use emacs in batch mode to run tests non-interactively
         run: |
-          emacs --batch \
+          emacs --batch -L . \
             -l *-test.el \
             -f ert-run-tests-batch-and-exit
