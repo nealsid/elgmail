@@ -16,27 +16,28 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+  test:
+    # Use the GitHub Actions matrix feature to test across different OS and Emacs versions
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        emacs-version: [28.2, 29.4, snapshot]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      - name: Install Emacs
-        # You may need a specific action or command to ensure Emacs is installed
-        # on the runner if it's not present by default. On Ubuntu, it's usually:
-        run: sudo apt-get update && sudo apt-get install emacs -y
-
+      # Install Emacs based on the runner's operating system
+      - name: Setup Emacs (Linux & macOS)
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs-version }}
 
       - name: Run ERT Tests
         # Use emacs in batch mode to run tests non-interactively
         run: |
           emacs --batch -L . \
-            -l elg-run-tests.el \
-            -l elgmail-batch-api-test.el \
-            -l elgmail-gmail-api-test.el \
-            -l elgmail-mail-parsing-test.el \
+            -l elg-test-init-and-load.el \
             -f ert-run-tests-batch-and-exit
