@@ -207,7 +207,7 @@ Google."
         (goto-char (point-min))
         (re-search-forward "^{")
         (backward-char)
-        (gethash "threads" (json-parse-buffer))))))))
+        (gethash "threads" (json-parse-buffer))))))
 
 (defun elg-get-threads-for-labels (labels &optional max-results)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
