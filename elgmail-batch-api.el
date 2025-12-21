@@ -14,6 +14,7 @@
 ;;
 ;;
 ;;; Code:
+(provide 'elgmail-batch-api)
 
 (defvar elgbatch-boundary-string "elgbatchboundary" "The string that is used to construct the nested request boundary")
 

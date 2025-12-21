@@ -17,6 +17,8 @@
 (require 'elgmail-batch-api)
 
 (ert-deftest elgbatch-create-5-nested-requests ()
+  "Verifies that a list of 5 request HTs is correctly transformed into a
+list of 5 nested requests."
   (let* ((thread-ids (number-sequence 1 5))
          (api-calls (mapcar (lambda (thread-id)
                               (format "GET /gmail/v1/users/me/thread/%s" thread-id))
@@ -29,11 +31,11 @@
                                  thread-ids api-calls))
          (inner-requests (elgbatch-create-nested-requests request-hts)))
     (seq-map-indexed (lambda (one-request idx)
-                       (should (equal (format "Content-Type: application/http
+                       (should (equal (format "--elgbatchboundary
+Content-Type: application/http
 Content-ID: %d
 
-
-GET /gmail/v1/users/me/thread/%02d
+GET /gmail/v1/users/me/thread/%d
 
 " (1+ idx) (1+ idx))
                                       one-request)))

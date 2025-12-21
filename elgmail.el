@@ -17,6 +17,7 @@
 ;; for reading messages.
 
 ;;; Code:
+(provide 'elgmail)
 (require 'oauth2)
 
 (defvar elg--oauth-token nil "The oauth2.el structure which contains the token for accessing the Gmail API")
