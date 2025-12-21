@@ -15,6 +15,8 @@
 ;;
 ;;
 ;;; Code:
+(provide 'elgmail-gmail-api)
+
 (defconst elg-thread-list-endpoint "https://gmail.googleapis.com/gmail/v1/users/me/threads" "Google endpoint for thread list method")
 (defconst elg-label-list-endpoint "https://gmail.googleapis.com/gmail/v1/users/me/labels" "Google endpoint for label list method")
 

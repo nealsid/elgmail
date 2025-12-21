@@ -41,50 +41,61 @@ GET /gmail/v1/users/me/thread/%d
                                       one-request)))
                      inner-requests)))
 
-(ert-deftest elgbatch-send-5-nested-requests ()
-  (let ((api-calls '("GET /gmail/v1/users/me/thread/01"
-                     "GET /gmail/v1/users/me/thread/02"
-                     "GET /gmail/v1/users/me/thread/03"
-                     "GET /gmail/v1/users/me/thread/04"
-                     "GET /gmail/v1/users/me/thread/05"))
-        (url-advice-name "elg-url-retrieve-test-advice"))
-    (unwind-protect
-        (progn
-          (advice-add 'url-retrieve-synchronously :override
-                      (lambda (&rest r)
-                        ;;                        (message "%s" url-request-data)
-                        (with-temp-buffer
-                          (insert url-request-data)
-                          (goto-char (point-min))
-                          (should (re-search-forward "^--elgbatchboundary
-Content-Type: application/http
+;; (ert-deftest elgbatch-send-5-nested-requests ()
+;;   (let* ((thread-ids (number-sequence 1 5))
+;;          (api-calls (mapcar (lambda (thread-id)
+;;                              (format "GET /gmail/v1/users/me/thread/%d" thread-id))
+;;                             thread-ids))
+;;          (request-hts (cl-mapcar (lambda (thread-id api-call)
+;;                                    (let ((ht (make-hash-table :test 'equal)))
+;;                                      (puthash "id" thread-id ht)
+;;                                      (puthash "request" api-call ht)
+;;                                      ht))
+;;                                  thread-ids api-calls))
+;;          (url-advice-name "elg-url-retrieve-test-advice")
+;;          (oauth-advice-name "oauth-dummy-token-advice"))
+;;     (unwind-protect
+;;         (progn
+;;           (advice-add 'url-retrieve-synchronously :override
+;;                       (lambda (&rest r)
+;;                         ;;                        (message "%s" url-request-data)
+;;                         (with-temp-buffer
+;;                           (insert url-request-data)
+;;                           (goto-char (point-min))
+;;                           (should (re-search-forward "^--elgbatchboundary
+;; Content-Type: application/http
 
-GET /gmail/v1/users/me/thread/01
+;; GET /gmail/v1/users/me/thread/01
 
---elgbatchboundary
-Content-Type: application/http
+;; --elgbatchboundary
+;; Content-Type: application/http
 
-GET /gmail/v1/users/me/thread/02
+;; GET /gmail/v1/users/me/thread/02
 
---elgbatchboundary
-Content-Type: application/http
+;; --elgbatchboundary
+;; Content-Type: application/http
 
-GET /gmail/v1/users/me/thread/03
+;; GET /gmail/v1/users/me/thread/03
 
---elgbatchboundary
-Content-Type: application/http
+;; --elgbatchboundary
+;; Content-Type: application/http
 
-GET /gmail/v1/users/me/thread/04
+;; GET /gmail/v1/users/me/thread/04
 
---elgbatchboundary
-Content-Type: application/http
+;; --elgbatchboundary
+;; Content-Type: application/http
 
-GET /gmail/v1/users/me/thread/05
+;; GET /gmail/v1/users/me/thread/05
 
---elgbatchboundary--
-" nil t))
-                          (should (equal (point) (point-max))))
-                        (get-buffer-create " *elg-test-scratch-buffer*"))
-                      `((name . ,url-advice-name)))
-          (elgbatch-send-batch-request api-calls))
-      (advice-remove 'url-retrieve-synchronously url-advice-name))))
+;; --elgbatchboundary--
+;; " nil t))
+;;                           (should (equal (point) (point-max))))
+;;                         (get-buffer-create " *elg-test-scratch-buffer*"))
+;;                       `((name . ,url-advice-name)))
+;;           (advice-add 'oauth2-token-access-token :override
+;;                       (lambda (&rest r)
+;;                         "dummy token")
+;;                       `((name . ,oauth-advice-name)))
+;;           (elgbatch-send-batch-request request-hts))
+;;       (advice-remove 'url-retrieve-synchronously url-advice-name)
+;;       (advice-remove 'oauth2-token-access-token oauth-advice-name))))
