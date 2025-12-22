@@ -15,6 +15,8 @@
 ;;
 
 ;;; Code:
+(provide 'elgmail-message-handling)
+
 (defun elg--find-part-by-mime-type (message-parts-array mimeType)
   "Given an array of message parts, find one with the matching mimeType.  If we have a part with a mime type of multipart/alternative, search its subarray of parts for the matching mime type."
   (let ((alternative-subpart (seq-find (lambda (one-part)

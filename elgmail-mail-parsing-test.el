@@ -17,6 +17,7 @@
 ;;; Code:
 (require 'ert)
 (require 'elgmail)
+(require 'elgmail-message-handling)
 
 (ert-deftest elg-text-html-email-test ()
   (with-temp-buffer

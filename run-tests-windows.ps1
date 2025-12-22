@@ -1,0 +1,1 @@
+& 'C:\Program Files\Emacs\emacs-30.1\bin\emacs.exe'  --batch -L . -l ..\oauth2\oauth2.el -l .\elg-test-init-and-load.el -f ert-run-tests-batch-and-exit
