@@ -19,9 +19,12 @@
 ;;; Code:
 (provide 'elgmail)
 (require 'oauth2)
+(require 'elgmail-gmail-api)
+
+(defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
+(defcustom elg-search-query-alist '(("inbox" . "l:inbox")) "An alist of named searched queries")
 
 (defvar elg--oauth-token nil "The oauth2.el structure which contains the token for accessing the Gmail API")
-(defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
 (defvar elg--label-to-server-label-alist '() "An association list of local labels to server label names.  Required because Gmail API is case sensitive regarding labels.")
 (defvar elg--thread-id-to-thread-cache (make-hash-table :test 'equal) "A hash table of thread id to thread resource.  This is a cache for downloading threads from Google's servers.")
 
@@ -32,11 +35,11 @@
   (pop-to-buffer (get-buffer-create "*elgmail labels*"))
   (erase-buffer)
   (delete-other-windows)
-  (let ((labels (elg-download-label-list)))
-    (setq elg--label-to-server-label-alist labels)
-    (dolist (one-label labels)
-      (insert-button (car one-label) 'action 'elg-get-and-display-threads-for-label)
-      (insert "\n"))))
+  (dolist (one-search-query elg-search-query-alist)
+    (insert-button (car one-search-query)
+                   'action 'elg-get-and-display-threads-for-search-query
+                   'search-query (cdr one-search-query))
+    (insert "\n")))
 
 (defun elg-download-label-list ()
   "Download the list of labels from Gmail for the authenticated user.  Labels are filtered by the labels in `elg-label-filter`"
@@ -72,43 +75,6 @@
   (other-window 1)
   (switch-to-buffer "*elgmail thread*"))
 
-(defun elg--find-part-by-mime-type (message-parts-array mimeType)
-  "Given an array of message parts, find one with the matching mimeType.  If we have a part with a mime type of multipart/alternative, search its subarray of parts for the matching mime type."
-  (let ((alternative-subpart (seq-find (lambda (one-part)
-                                         (string-equal (gethash "mimeType" one-part) "multipart/alternative"))
-                                       message-parts-array)))
-    (if alternative-subpart
-        (elg--find-part-by-mime-type (gethash "parts" alternative-subpart) mimeType)
-      (seq-find (lambda (one-part)
-                  (string-equal (gethash "mimeType" one-part) mimeType))
-                message-parts-array))))
-
-(defun elg--find-body (msg-payload)
-  "Find the body from a message payload.  The return value is a cons cell of (mime-type . base64-encoded body)."
-  (let ((payload-mime-type (gethash "mimeType" msg-payload)))
-    (cond ((or (equal payload-mime-type "multipart/alternative")
-               (equal payload-mime-type "multipart/mixed"))
-           (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
-             (cons "text/plain" (gethash "data" (gethash "body" text-plain-part)))))
-          (t (cl-assert (or (equal payload-mime-type "text/plain")
-                            (equal payload-mime-type "text/html")))
-             (cons payload-mime-type (gethash "data" (gethash "body" msg-payload)))))))
-
-(defun elg--find-body-from-payload (msg-payload)
-  "Find the body from a message payload.  The mime type of the payload is examined.  If it's text/html, we return that body.  If it's multipart/alternative, we find the text/plain part and return that."
-  (let ((payload-mime-type (gethash "mimeType" msg-payload)))
-    (cond ((equal payload-mime-type "multipart/alternative")
-           (let ((text-plain-part (elg--find-part-by-mime-type (gethash "parts" msg-payload) "text/plain")))
-             (string-replace "" "" (base64-decode-string (gethash "data"  (gethash "body" text-plain-part)) t))))
-          ((equal payload-mime-type "text/html")
-           (with-temp-buffer
-             (insert (base64-decode-string (gethash "data" (gethash "body" msg-payload)) t))
-             (shr-render-region (point-min) (point-max))
-             (buffer-substring (point-min) (point-max))))
-          ((equal payload-mime-type "text/plain")
-           (string-replace "" "" (base64-decode-string (gethash "data" (gethash "body" msg-payload)) t)))
-          (t nil))))
-
 (defun elg-get-and-display-single-thread (button)
   (pop-to-buffer "*elgmail thread*")
   (erase-buffer)
@@ -135,7 +101,7 @@
       (push (gethash "id" one-thread) reversed-thread-ids))
     (nreverse reversed-thread-ids)))
 
-(defun elg-get-and-display-threads-for-label (button)
+(defun elg-get-and-display-threads-for-search-query (button)
   (let* ((label-name (button-label button))
          (label-alist-entry (assoc label-name elg--label-to-server-label-alist))
          (server-label-name (cdr label-alist-entry))
@@ -168,13 +134,6 @@
                 (insert "\n"))
             (insert "\t429\n")))))))
 
-(defun elg--get-subject-from-headers (message-headers)
-  (catch 'found-subject
-    (seq-doseq (one-header message-headers)
-      (let* ((header-name (gethash "name" one-header)))
-        (when (string-equal header-name "Subject")
-          (throw 'found-subject (gethash "value" one-header)))))))
-
 (defun elg-get-thread-by-id (thread-id &optional no-cache)
   (let ((thread (gethash thread-id elg--thread-id-to-thread-cache)))
     (if (and thread (not no-cache))
@@ -198,17 +157,14 @@
 MAX-RESULTS, if specified, limits the number of results returned.
 Returns a list of THREAD objects, which are parsed from JSON returned by
 Google."
-  (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))
-         (url-request-extra-headers `(("Authorization" . ,(format "Bearer %s" gmail-api-access-token))));;,(concat "Bearer " gmail-api-access-token))))
-         (num-results (if max-results max-results 100))
-         (thread-search-url (format "https://gmail.googleapis.com/gmail/v1/users/me/threads?q=%s&maxResults=%d" query num-results)))
-    (let* ((convo-fetch-response-buffer (url-retrieve-synchronously (url-encode-url get-convo-url))))
-      (message "%s" convo-fetch-response-buffer)
-      (with-current-buffer convo-fetch-response-buffer
-        (goto-char (point-min))
-        (re-search-forward "^{")
-        (backward-char)
-        (gethash "threads" (json-parse-buffer))))))
+  (elg-call-thread-list-endpoint `((q . ,query))
+                                 'elg-search-query-downloaded))
+
+(defun elg-search-query-downloaded (json-parsed)
+  (message "%s" json-parsed))
+    ;; (dolist (one-label labels)
+    ;;   (insert-button (car one-label) 'action 'elg-get-and-display-threads-for-label)
+    ;;   (insert "\n"))))
 
 (defun elg-get-threads-for-labels (labels &optional max-results)
   (let* ((gmail-api-access-token (oauth2-token-access-token elg--oauth-token))

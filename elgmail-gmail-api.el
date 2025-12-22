@@ -58,7 +58,7 @@ called with the parsed JSON and the extra args passed to
   "Function to invoke Google's thread list endpoint.  PARAM-ALIST is an
 assoc-list of query parameters, which usually correspond to a Gmail
 search query."
-  (when (and callback (not (functionp user-callback)))
+  (when (and user-callback (not (functionp user-callback)))
     (signal 'wrong-type-argument (list user-callback 'functionp)))
   (when (and callback-args (not (listp callback-args)))
     (signal 'wrong-type-argument (list callback-args 'listp)))
@@ -70,7 +70,7 @@ JSON response. JSON-PARSED is the parsed JSON returned by
 Google. USER-CALLBACK & CALLBACK-ARGS are the callback we should invoke,
 which is called by (apply user-callback json-parsed callback-args)"
   (message "hello! %s" json-parsed)
-  (apply user-callback json-parsed user-callback-args))
+  (apply user-callback (gethash "threads" json-parsed) callback-args))
 
 (defun elg-call-label-list-endpoint (param-alist user-callback &optional callback-args)
   "Asynchronously invoke Google's endpoint to retrieve a list of Gmail
@@ -88,4 +88,4 @@ which is invoked as (apply user-callback json-parsed callback-args)"
 been retrieved.  This callback invokes the callback passed by the user
 to `elg-call-label-list-endpoint'."
   (message "hello! %s" json-parsed)
-  (apply user-callback json-parsed user-callback-args))
+  (apply user-callback (gethash "labels" json-parsed) user-callback-args))
