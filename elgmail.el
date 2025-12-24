@@ -22,7 +22,7 @@
 (require 'elgmail-gmail-api)
 
 (defcustom elg-label-filter '("inbox" "sent" "trash" "draft" "unread" "emacs-devel") "An inclusion list of labels to display")
-(defcustom elg-search-query-alist '(("inbox" . "l:inbox")) "An alist of named searched queries")
+(defcustom elg-search-query-alist '(("inbox" . "label:INBOX")) "An alist of named searched queries")
 
 (defvar elg--oauth-token nil "The oauth2.el structure which contains the token for accessing the Gmail API")
 (defvar elg--label-to-server-label-alist '() "An association list of local labels to server label names.  Required because Gmail API is case sensitive regarding labels.")
@@ -37,9 +37,17 @@
   (delete-other-windows)
   (dolist (one-search-query elg-search-query-alist)
     (insert-button (car one-search-query)
-                   'action 'elg-get-and-display-threads-for-search-query
+                   'action 'elg-get-threads-for-search-query
                    'search-query (cdr one-search-query))
     (insert "\n")))
+
+(defun elg-get-threads-for-search-query (button)
+  (let ((search-query (button-get button 'search-query)))
+    (elg-call-thread-list-endpoint `((q . ,search-query)) 'elg-get-threads-for-search-query-complete)))
+
+(defun elg-get-threads-for-search-query-complete (json-parsed)
+  (elgmail-ui-set-thread-list json-parsed)
+  (elgmail-ui-render-thread-list))
 
 (defun elg-download-label-list ()
   "Download the list of labels from Gmail for the authenticated user.  Labels are filtered by the labels in `elg-label-filter`"
@@ -65,15 +73,6 @@
               (if (member-ignore-case label-name elg-label-filter)
                   (push `(,(capitalize label-name) . ,label-name) final-label-list))))
           final-label-list)))))
-
-(defun elg--configure-window-layout (max-label-length)
-  (delete-other-windows)
-  (split-window-right (ceiling (* max-label-length 1.5)))
-  (other-window 1)
-  (switch-to-buffer "*elgmail threads*")
-  (split-window-below)
-  (other-window 1)
-  (switch-to-buffer "*elgmail thread*"))
 
 (defun elg-get-and-display-single-thread (button)
   (pop-to-buffer "*elgmail thread*")
